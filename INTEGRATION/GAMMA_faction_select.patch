@@ -1,0 +1,38 @@
+--- a/gamedata/scripts/ui_mm_faction_select.script
++++ b/gamedata/scripts/ui_mm_faction_select.script
+@@ -201,6 +201,12 @@
+ 			table.insert(start_pos,ini_map:r_float_ex(start_location, "lvid"))
+ 			table.insert(start_pos,ini_map:r_float_ex(start_location, "gvid"))
+ 			table.insert(start_pos,vector():set(ini_map:r_float_ex(start_location,"x"),ini_map:r_float_ex(start_location,"y"),ini_map:r_float_ex(start_location,"z")))
++			-- UNISG HQ Infirmary: turn toward the corridor, using the direction
++			-- sampled in game. Only this new-game start receives an angle.
++			if faction == "isg" and start_location == "isg_jup_b208_hq" then
++				local look = vector():set(0.636, 0, -0.771)
++				start_pos.angle = vector():set(0, look:getH(), 0)
++			end
+ 		else
+ 			spawn_path = nil  --patrol("spawn_player_"..faction)
+ 		end
+@@ -387,7 +393,7 @@
+ 		if warfare_enabled and (warfare_options.options.random_starting_locations) then
+ 			warfare.initialize_random_starting_locations()
+ 		else
+-			ChangeLevel(start_pos[3],start_pos[1],start_pos[2],VEC_ZERO)
++			ChangeLevel(start_pos[3],start_pos[1],start_pos[2],start_pos.angle or VEC_ZERO)
+ 		end
+ 	end
+ end
+@@ -1154,7 +1160,12 @@
+ 	local n = ini_map:line_count(self.selected_faction .. "_start_locations") or 0
+ 	for i=0, n-1 do
+ 		local result, id, value = ini_map:r_line(self.selected_faction.."_start_locations",i,"","" )
+-		if value then
++		-- UNISG HQ start: available ONLY in Warfare, with Story Mode disabled.
++		-- The original map rebuilds on checkbox changes; do not modify other starts.
++		local unisg_hq_allowed = self.selected_faction == "isg"
++			and self.ck_warfare and self.ck_warfare:GetCheck()
++			and not (self.ck_story and self.ck_story:GetCheck())
++		if value and (id ~= "isg_jup_b208_hq" or unisg_hq_allowed) then
+ 			local tbl = str_explode(value,",")
+ 			if self.ck_story and self.ck_story:GetCheck() then
+ 				if (tbl[2] == "true") or (tbl[2] == "false") then

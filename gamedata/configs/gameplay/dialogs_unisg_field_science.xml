@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="windows-1251"?>
+<game_dialogs>
+  <dialog id="unisg_field_measure_brief_dialog">
+    <precondition>zzzzzz_walo_unisg_field_science.measure_intro_available</precondition>
+    <phrase_list>
+      <phrase id="0">
+        <text>unisg_field_measure_brief_0</text>
+        <next>1</next>
+      </phrase>
+      <phrase id="1">
+        <text>unisg_field_measure_brief_1</text>
+        <next>2</next>
+      </phrase>
+      <phrase id="2">
+        <text>unisg_field_measure_brief_2</text>
+        <next>3</next>
+      </phrase>
+      <phrase id="3">
+        <text>unisg_field_measure_brief_3</text>
+        <next>4</next>
+      </phrase>
+      <phrase id="4">
+        <text>unisg_field_measure_brief_4</text>
+        <next>5</next>
+      </phrase>
+      <phrase id="5">
+        <text>unisg_field_measure_brief_5</text>
+        <give_info>unisg_field_measure_intro_ack</give_info>
+      </phrase>
+    </phrase_list>
+  </dialog>
+<dialog id="unisg_field_measure_debrief_dialog">
+    <precondition>zzzzzz_walo_unisg_field_science.measure_report_available</precondition>
+    <phrase_list>
+      <phrase id="0">
+        <text>unisg_field_measure_debrief_0</text>
+        <next>1</next>
+      </phrase>
+      <phrase id="1">
+        <text>unisg_field_measure_debrief_1</text>
+        <next>2</next>
+      </phrase>
+      <phrase id="2">
+        <text>unisg_field_measure_debrief_2</text>
+        <next>3</next>
+      </phrase>
+      <phrase id="3">
+        <text>unisg_field_measure_debrief_3</text>
+        <give_info>unisg_field_measure_debrief_ack</give_info>
+        <action>zzzzzz_walo_unisg_field_science.confirm_measure_report</action>
+      </phrase>
+    </phrase_list>
+  </dialog>
+  <dialog id="unisg_field_research_brief_dialog">
+    <precondition>zzzzzz_walo_unisg_field_science.research_intro_available</precondition>
+    <phrase_list>
+      <phrase id="0">
+        <text>unisg_field_research_brief_0</text>
+        <next>1</next>
+      </phrase>
+      <phrase id="1">
+        <text>unisg_field_research_brief_1</text>
+        <next>2</next>
+      </phrase>
+      <phrase id="2">
+        <text>unisg_field_research_brief_2</text>
+        <next>3</next>
+      </phrase>
+      <phrase id="3">
+        <text>unisg_field_research_brief_3</text>
+        <next>4</next>
+      </phrase>
+      <phrase id="4">
+        <text>unisg_field_research_brief_4</text>
+        <next>5</next>
+      </phrase>
+      <phrase id="5">
+        <text>unisg_field_research_brief_5</text>
+        <give_info>unisg_field_research_intro_ack</give_info>
+      </phrase>
+    </phrase_list>
+  </dialog>
+  <dialog id="unisg_field_research_debrief_dialog">
+    <precondition>zzzzzz_walo_unisg_field_science.research_report_available</precondition>
+    <phrase_list>
+      <phrase id="0">
+        <text>unisg_field_research_debrief_0</text>
+        <next>1</next>
+      </phrase>
+      <phrase id="1">
+        <text>unisg_field_research_debrief_1</text>
+        <next>2</next>
+      </phrase>
+      <phrase id="2">
+        <text>unisg_field_research_debrief_2</text>
+        <next>3</next>
+      </phrase>
+      <phrase id="3">
+        <text>unisg_field_research_debrief_3</text>
+        <give_info>unisg_field_research_debrief_ack</give_info>
+        <action>zzzzzz_walo_unisg_field_science.confirm_research_report</action>
+      </phrase>
+    </phrase_list>
+  </dialog>
+</game_dialogs>

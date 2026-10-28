@@ -1,0 +1,182 @@
+-- UNISG Workspots v0.3.3: SECOND native GAMMA campfire at the Jupiter rail depot (same safe physics as v0.3.2).
+-- Built on GAMMA campfire_placeable + bind_campfire and the stable v0.3.0 Workspots.
+-- Adds a fixed wood model and a regular Z_CFIRE "campfire" zone.
+-- No patches to native GAMMA scripts, no periodic teleport, no anomaly deletion.
+
+local SMART = "jup_b208"
+local KEY = "walo_unisg_hq_campfire_jup_b208_v02"
+local WOOD_SECTION = "ph_campfiremod"
+local FIRE_SECTION = "campfire"
+local POS = {399.007, 4.279, -94.434} -- player-measured second spot, depot hall
+local DIR = {-0.031, 0.000, -1.000} -- measured direction (the fire itself is radial)
+local RETRY_MS = 3000
+
+local complete = false
+local next_attempt = 0
+local warning_shown = false
+
+local function log(fmt, ...)
+    if printf then printf("[UNISG Workspots Campfire #2 v0.3.3] " .. string.format(fmt, ...)) end
+end
+
+local function enabled()
+    return IsWarfare and IsWarfare()
+        and IsStoryMode and not IsStoryMode()
+        and has_alife_info and has_alife_info("story_mode_disabled")
+end
+
+local function vec(x, y, z)
+    return vector():set(x, y, z)
+end
+
+local function existing(ids, key, section)
+    local id = ids[key]
+    local se_obj = id and alife_object(id)
+    return se_obj and se_obj:section_name() == section and se_obj or nil
+end
+
+-- Avoid adding a second campfire over an already placed player/native one.
+-- Native bind_campfire.campfires_all indexes nearby on-line campfire zones.
+local function nearby_native_campfire()
+    local all = bind_campfire and bind_campfire.campfires_all
+    if type(all) ~= "table" then return false end
+    local target = vec(POS[1], POS[2], POS[3])
+    for _, binder in pairs(all) do
+        local obj = binder and binder.object
+        if obj and obj.position then
+            local ok, pos = pcall(function() return obj:position() end)
+            if ok and pos and pos:distance_to(target) <= 1.6 then return true end
+        end
+    end
+    return false
+end
+
+local function create_wood(ids, gvid)
+    local pos = vec(POS[1], POS[2], POS[3])
+    local lvid = warfare_utils.nearest_lvid(pos)
+    if not lvid then return false, "invalid level vertex at firewood" end
+    local se_obj = alife_create(WOOD_SECTION, pos, lvid, gvid)
+    if not se_obj then return false, "cannot spawn fixed firewood" end
+    -- ph_campfiremod already defines the correct model, physics shell and script.
+    -- Never override its bones: the old v0.3.1 physic_object fixed_bones="link"
+    -- crashes X-Ray with PhysicsShell.cpp "wrong fixed bone".
+    ids.wood = se_obj.id
+    local heading = vec(DIR[1], DIR[2], DIR[3]):getH()
+    se_obj.angle = vec(0, heading % (2 * math.pi), 0)
+    log("created firewood id=%s pos=%.3f,%.3f,%.3f", tostring(se_obj.id), POS[1], POS[2], POS[3])
+    return true
+end
+
+local function create_fire(ids, gvid)
+    -- Same offsets and safe spherical zone as GAMMA's campfire_placeable.spawn_anomaly_campfire.
+    local pos = vec(POS[1] - 0.05, POS[2] + 0.20, POS[3] + 0.05)
+    local lvid = warfare_utils.nearest_lvid(pos)
+    if not lvid then return false, "invalid level vertex at campfire" end
+    local se_obj = alife_create(FIRE_SECTION, pos, lvid, gvid)
+    if not se_obj then return false, "cannot spawn native campfire zone" end
+    ids.fire = se_obj.id
+    log("created native campfire id=%s", tostring(se_obj.id))
+    return true
+end
+
+local function configure_fire(ids, zone)
+    if ids.fire_configured then return true end
+    local data = utils_stpk.get_anom_zone_data(zone)
+    if not data then return false, "cannot read native campfire zone data" end
+    data.shapes = data.shapes or {}
+    data.shapes[1] = {
+        shtype = 0,
+        offset = vec(0, 10, 0),
+        center = vec(0, 0, 0),
+        radius = 0.85,
+    }
+    utils_stpk.set_anom_zone_data(data, zone)
+    ids.fire_configured = true
+    return true
+end
+
+-- Recover saves made with v0.3.1, where a manually edited physic_object
+-- might have survived. Never delete unrelated objects or search the whole level.
+local function retire_unsafe_v031_firewood(ids)
+    local old = ids.wood and alife_object(ids.wood)
+    if not old or old:section_name() ~= "physic_object" then return end
+    local ok, data = pcall(utils_stpk.get_physic_data, old)
+    local visual = ok and data and data.visual_name
+    if type(visual) ~= "string" or not string.find(string.lower(visual), "campfiremod", 1, true) then
+        log("WARNING: old object id=%s cannot be verified; not deleting", tostring(ids.wood))
+        return
+    end
+    local oldid = old.id
+    alife_release(old)
+    ids.wood = nil
+    log("MIGRATED: removed unsafe v0.3.1 firewood id=%s", tostring(oldid))
+end
+
+local function ensure_campfire(state, smart)
+    state[KEY] = state[KEY] or {}
+    local ids = state[KEY]
+    retire_unsafe_v031_firewood(ids)
+
+    if ids.external_fire then return true end
+    -- Only test for a different existing campfire before creating ours.
+    -- If this is an already-installed save, the persistent IDs are authoritative.
+    if not ids.wood and not ids.fire and nearby_native_campfire() then
+        ids.external_fire = true
+        log("SKIPPED: existing native campfire already occupies the requested location")
+        return true
+    end
+
+    local wood = existing(ids, "wood", WOOD_SECTION)
+    if not wood then
+        ids.wood = nil
+        local ok, err = create_wood(ids, smart.m_game_vertex_id)
+        if not ok then return false, err end
+    end
+    local zone = existing(ids, "fire", FIRE_SECTION)
+    if not zone then
+        ids.fire = nil
+        ids.fire_configured = nil
+        local ok, err = create_fire(ids, smart.m_game_vertex_id)
+        if not ok then return false, err end
+        zone = existing(ids, "fire", FIRE_SECTION)
+        if not zone then return false, "campfire server object not yet accessible" end
+    end
+    local ok, err = configure_fire(ids, zone)
+    if not ok then return false, err end
+    log("READY wood=%s fire=%s. Matches and on/off handled by native GAMMA binder.", tostring(ids.wood), tostring(ids.fire))
+    return true
+end
+
+local function actor_on_first_update()
+    complete = false
+    next_attempt = 0
+    warning_shown = false
+end
+
+local function actor_on_update()
+    if complete or not enabled() then return end
+    if not (db and db.actor and SIMBOARD and warfare_utils and warfare_utils.nearest_lvid
+        and warfare_utils.smart_on_actor_level and alife_storage_manager and utils_stpk
+        and utils_stpk.get_physic_data
+        and utils_stpk.get_anom_zone_data and utils_stpk.set_anom_zone_data) then return end
+    local now = time_global()
+    if now < next_attempt then return end
+    next_attempt = now + RETRY_MS
+
+    local smart = warfare_utils.smart_on_actor_level(SMART)
+    if not smart or smart.owning_faction ~= "isg" then return end
+    local state = alife_storage_manager.get_state()
+    if not state then return end
+    local ok, result, err = pcall(ensure_campfire, state, smart)
+    if ok and result then
+        complete = true
+    elseif not warning_shown then
+        log("WARNING: %s", tostring(ok and err or result))
+        warning_shown = true
+    end
+end
+
+function on_game_start()
+    RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
+    RegisterScriptCallback("actor_on_update", actor_on_update)
+end

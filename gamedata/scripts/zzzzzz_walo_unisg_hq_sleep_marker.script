@@ -1,0 +1,115 @@
+-- UNISG HQ: PDA sleep marker v0.1 (WALO 1.6.11 + GAMMA)
+-- Marker only: the Workspots bed already opens the normal sleep interface.
+-- Follows warfare_sleep_spots.script's persistent, non-AI space-restrictor scheme.
+-- Does NOT replace/patch WALO's script or alter furniture/AI.
+
+local SMART = "jup_b208"
+local BED_STORAGE = "walo_unisg_workspots_furniture_v022"
+local BED_SECTION = "placeable_bed_2"
+local STORAGE_KEY = "walo_unisg_sleep_marker_jup_b208_v01"
+local BED_POS = {384.289, 4.408, -130.070} -- Workspots v0.3.0, measured bed centre
+local INFIRMARY_GVID = 4677 -- measured by the player in the infirmary
+local MARKER_SECTION = "space_restrictor"
+local NOT_A_RESTRICTOR = 3
+local MAP_SPOT = "ui_pda2_actor_sleep_location"
+local MAP_HINT = "st_ui_pda_sleep_place"
+local RADIUS = 1.5
+local RETRY_MS = 2000
+
+local complete = false
+local next_retry = 0
+local error_logged = false
+
+local function log(fmt, ...)
+    if printf then
+        printf("[UNISG Sleep Marker v0.1] " .. string.format(fmt, ...))
+    end
+end
+
+local function enabled()
+    return IsWarfare and IsWarfare()
+        and IsStoryMode and not IsStoryMode()
+        and has_alife_info and has_alife_info("story_mode_disabled")
+end
+
+local function bed_exists(state)
+    local furniture = state and state[BED_STORAGE]
+    local bed_id = type(furniture) == "table" and furniture.medical_bed
+    local bed = bed_id and alife_object(bed_id)
+    return bed and bed:section_name() == BED_SECTION
+end
+
+local function create_marker(state)
+    local pos = vector():set(BED_POS[1], BED_POS[2], BED_POS[3])
+    local lvid = warfare_utils.nearest_lvid(pos)
+    if not lvid then return nil end
+
+    local se_obj = alife_create(MARKER_SECTION, pos, lvid, INFIRMARY_GVID)
+    if not se_obj then return nil end
+    -- Record the ID immediately so an unexpected later error cannot spawn a
+    -- second restrictor on the next tick or after reloading the save.
+    state[STORAGE_KEY] = se_obj.id
+    local data = utils_stpk.get_space_restrictor_data(se_obj)
+    data.shapes = {{shtype = 0, offset = vector():set(0, 0, 0), radius = RADIUS}}
+    data.restrictor_type = NOT_A_RESTRICTOR
+    utils_stpk.set_space_restrictor_data(data, se_obj)
+    log("created smart=%s marker=%s", SMART, tostring(se_obj.id))
+    return se_obj.id
+end
+
+local function ensure_marker(state)
+    -- Avoid a second marker if a newer WALO version adds this spot natively.
+    local walo = state.warfare_sleep_markers
+    local native_id = type(walo) == "table" and walo[SMART]
+    local native = native_id and alife_object(native_id)
+    if native and native:section_name() == MARKER_SECTION then
+        return true
+    end
+
+    local marker_id = state[STORAGE_KEY]
+    local marker = marker_id and alife_object(marker_id)
+    if not (marker and marker:section_name() == MARKER_SECTION) then
+        marker_id = create_marker(state)
+        if not marker_id then return false end
+    end
+
+    if level.map_has_object_spot(marker_id, MAP_SPOT) == 0 then
+        level.map_add_object_spot_ser(marker_id, MAP_SPOT, MAP_HINT)
+        log("PDA sleep spot attached to marker=%s", tostring(marker_id))
+    end
+    return true
+end
+
+local function actor_on_first_update()
+    complete = false
+    next_retry = 0
+    error_logged = false
+end
+
+local function actor_on_update()
+    if complete or not enabled() then return end
+    local now = time_global()
+    if now < next_retry then return end
+    next_retry = now + RETRY_MS
+
+    if not (db and db.actor and warfare_utils and warfare_utils.smart_on_actor_level
+        and alife_storage_manager and utils_stpk and level) then return end
+    -- No markers on other maps and never in the Story Mode version of Jupiter.
+    if not warfare_utils.smart_on_actor_level(SMART) then return end
+
+    local state = alife_storage_manager.get_state()
+    if not bed_exists(state) then return end -- marker only for the actual placed bed
+
+    local ok, result = pcall(ensure_marker, state)
+    if ok and result then
+        complete = true
+    elseif not error_logged then
+        log("WARNING could not attach marker: %s", tostring(result))
+        error_logged = true
+    end
+end
+
+function on_game_start()
+    RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
+    RegisterScriptCallback("actor_on_update", actor_on_update)
+end

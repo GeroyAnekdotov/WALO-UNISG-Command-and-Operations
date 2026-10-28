@@ -1,0 +1,1168 @@
+-- UNISG Field Science v0.9.12 stable gameplay, integrated HQ distribution v1.0.3.
+-- Dedicated task companion squads and their own saved state; never replace stock escort task IDs.
+local OPERATION = "unisg_field_active_operation"
+local BUSY_INFO = "unisg_field_science_busy"
+local M_DEBRIEF_INFO = "unisg_field_measure_debrief_ack"
+local R_DEBRIEF_INFO = "unisg_field_research_debrief_ack"
+local MEASURE = "sim_default_isg_trader_task_9"
+local RESEARCH = "sim_default_isg_medic_task_3"
+local MSQUAD = "unisg_hq_field_measure_squad"
+local RSQUAD = "unisg_hq_field_research_squad"
+local M_TARGET = "unisg_hq_field_measure_target"
+local M_FINISHED = "unisg_hq_field_measure_done"
+local M_CONFIRMED = "unisg_hq_field_measure_report_confirmed"
+local M_ACCEPTED = "unisg_field_measure_intro_ack"
+local M_INTRO_REQUEST = "unisg_field_measure_intro_prompted"
+local M_REPORT_READY = "unisg_field_measure_report_ready"
+local M_REPORT_REQUEST = "unisg_field_measure_report_prompted"
+local R_COUNT = "unisg_hq_field_research_count"
+local R_QUEUE = "unisg_hq_field_research_pending"
+local R_DONE = "unisg_hq_field_research_done"
+local R_CONFIRMED = "unisg_hq_field_research_report_confirmed"
+local R_ACCEPTED = "unisg_field_research_intro_ack"
+local R_INTRO_REQUEST = "unisg_field_research_intro_prompted"
+local R_REPORT_READY = "unisg_field_research_report_ready"
+local R_REPORT_REQUEST = "unisg_field_research_report_prompted"
+local R_NEXT = "unisg_hq_field_research_next_sample"
+-- Persistent one-body observation; retained keys allow migrating v0.9.5/6 saves.
+local R_FOCUS = "unisg_hq_field_research_focus"
+local R_PHASE = "unisg_hq_field_research_phase"
+local R_PHASE_AT = "unisg_hq_field_research_phase_at"
+local R_NEAR_AT = "unisg_hq_field_research_near_at"
+local R_STUDIED = "unisg_hq_field_research_studied_ids"
+local RESEARCH_GUIDE_RANGE = 85
+local M_RECENT_TARGETS = "unisg_hq_field_measure_recent_anomalies"
+local RESEARCH_PROXIMITY = "unisg_hq_field_research_proximity_map"
+local RESEARCH_NEAR_DIST = 4.5
+local RESEARCH_STUDY_MS = 12000
+local M_ARRIVAL = "unisg_hq_field_measure_safe_arrival"
+local R_ARRIVAL = "unisg_hq_field_research_safe_arrival"
+local SAFE_X,SAFE_Y,SAFE_Z = 387.757,4.279,-125.742
+local SAFE_GVID = 4677
+local M_HOME = "unisg_hq_field_measure_home"
+local R_HOME = "unisg_hq_field_research_home"
+local M_RETURN = "unisg_hq_field_measure_returning"
+local R_RETURN = "unisg_hq_field_research_returning"
+local M_LEVEL = "unisg_hq_field_measure_level"
+local R_LEVEL = "unisg_hq_field_research_level"
+local M_MEET = "unisg_hq_field_measure_rendezvous"
+local R_MEET = "unisg_hq_field_research_rendezvous"
+local R_LIMIT = 5
+-- Survey patrol: built using GAMMA's existing axr_beh companion waypoints.
+-- No NPC teleports and no changes to original scientist behavior.
+local PATROL_READY = "unisg_hq_field_patrol_ready"
+local pending_board_refresh = nil
+local next_update = 0
+local warned = {}
+local dialog_completion_due = {}
+local scan_voice_refs = {} -- keep active sound_object alive until sound completes / next scan
+local research_wait_log = 0
+
+local function log(s, ...)
+    if printf then printf("[UNISG Field Science v0.9.12] " .. string.format(s, ...)) end
+end
+
+local function enabled()
+    return IsWarfare and IsWarfare() and IsStoryMode and not IsStoryMode()
+        and has_alife_info and has_alife_info("story_mode_disabled")
+        and db.actor and xr_conditions and xr_conditions.is_actor_from_faction
+        and xr_conditions.is_actor_from_faction(db.actor, nil, {"isg"})
+end
+
+local function state(key, default)
+    local val = db.actor and load_var(db.actor, key)
+    if val == nil then return default end
+    return val
+end
+local function put(key,val)
+    if db.actor then save_var(db.actor,key,val) end
+end
+local function clear_dialog_flags(keys)
+    if not db.actor then return end
+    for _,key in ipairs(keys) do
+        if db.actor:has_info(key) then db.actor:disable_info_portion(key) end
+    end
+end
+local function begin_dialog_state(keys)
+    clear_dialog_flags(keys)
+end
+local function set_expedition_busy()
+    if db.actor and not db.actor:has_info(BUSY_INFO) then db.actor:give_info_portion(BUSY_INFO) end
+end
+local function release_expedition_busy()
+    if db.actor and db.actor:has_info(BUSY_INFO) then db.actor:disable_info_portion(BUSY_INFO) end
+end
+local function tm_task(id)
+    local tm = task_manager and task_manager.get_task_manager and task_manager.get_task_manager()
+    return tm and tm.task_info and tm.task_info[id], tm
+end
+local function active(id)
+    local t = tm_task(id)
+    -- A completed quest may keep a task_info entry until GAMMA processes it.
+    -- Its presence is NOT proof that a companion slot remains occupied.
+    return enabled() and t ~= nil and t.t ~= nil
+        and t.status ~= "completed" and t.status ~= "complete"
+        and t.status ~= "fail" and t.status ~= "failed"
+        and t.status ~= "cancelled"
+end
+local function squad(name)
+    return get_story_squad and get_story_squad(name)
+end
+-- Science escort AI uses shared companion and anomaly state. Only ONE of our
+-- missions may be accepted at a time. Check live task-manager state as well as
+-- the save-backed slot so that offers are rejected immediately after acceptance.
+local function other_expedition_active(this_id)
+    local other_id = this_id == MEASURE and RESEARCH or MEASURE
+    local other_squad = this_id == MEASURE and RSQUAD or MSQUAD
+    if active(other_id) or squad(other_squad) then return true end
+    local current = state(OPERATION)
+    if current and current ~= this_id then
+        return true -- Once booked, the shared escort slot cannot be reused until cleanup.
+    end
+    return false
+end
+local function science_slot_available(this_id)
+    if other_expedition_active(this_id) then return false end
+    if db.actor and db.actor:has_info(BUSY_INFO) and state(OPERATION) ~= this_id then return false end
+    -- GAMMA's scientist escorts also consume the shared anomaly AI target.
+    if squad("ecolog_companion_task_1") or squad("ecolog_companion_task_2") then return false end
+    return true
+end
+local function dialog_npc_is(name,npc)
+    local sq=squad(name)
+    if not sq or not npc then return false end
+    for member in sq:squad_members() do
+        if member.id == npc:id() then return true end
+    end
+    return false
+end
+local function squad_npc(name)
+    local sq = squad(name)
+    if not sq then return nil end
+    for k in sq:squad_members() do
+        local npc = k.id and level.object_by_id(k.id)
+        if npc and npc:alive() then return npc end
+    end
+    return nil
+end
+-- Reuse the original Call of Pripyat scientist line without depending on
+-- xr_sound's faction-specific theme registration (which logs Wrong sound theme
+-- for the custom UNISG escort). The OGG remains in the player's game archives.
+-- Only the real UNISG survey companion is allowed to trigger this cue.
+local ORIGINAL_SCAN_VOICES = {
+    "characters_voice\\scenario\\jupiter\\jup_b6_stalker_1_first_measurement_begin",
+    "characters_voice\\scenario\\jupiter\\jup_b6_stalker_1_first_measurement_in_progress",
+}
+local function play_scan_start(actor,npc,p)
+    if not (npc and enabled() and active(MEASURE) and state(OPERATION)==MEASURE
+        and dialog_npc_is(MSQUAD,npc)) then return end
+    local fs = getFS and getFS()
+    if not fs or not sound_object then
+        log("scan started, but sound filesystem/player unavailable")
+        return
+    end
+    for _,base_path in ipairs(ORIGINAL_SCAN_VOICES) do
+        -- GAMMA's archives can hold single or numbered copies of this dialogue.
+        for _,suffix in ipairs({"", "_1"}) do
+            local path=base_path..suffix
+            local found_ok,found=pcall(function()
+                return fs:exist("$game_sounds$",path..".ogg")
+            end)
+            if found_ok and found then
+                local played_ok,err=pcall(function()
+                    local snd=sound_object(path)
+                    snd:play_at_pos(npc,npc:position(),0,sound_object.s3d)
+                    scan_voice_refs[npc:id()]=snd
+                end)
+                if played_ok then
+                    log("scan started; original scientist voice: %s",path)
+                    return
+                end
+                log("scan voice playback failed for %s: %s",path,tostring(err))
+            end
+        end
+    end
+    -- The scan itself continues normally even if a sound pack lacks this OGG.
+    log("scan started; original scientist voice not found in game sound archives")
+end
+
+
+local function play_scan_done(actor,npc,p)
+    if not (npc and enabled() and active(MEASURE) and state(OPERATION)==MEASURE
+        and dialog_npc_is(MSQUAD,npc)) then return end
+    local fs = getFS and getFS()
+    if not fs or not sound_object then return end
+    local base_path=[=[characters_voice\scenario\jupiter\jup_b6_stalker_1_measurements_done]=]
+    for _,suffix in ipairs({"", "_1"}) do
+        local path=base_path..suffix
+        local found_ok,found=pcall(function()
+            return fs:exist("$game_sounds$",path..".ogg")
+        end)
+        if found_ok and found then
+            local ok,err=pcall(function()
+                local snd=sound_object(path)
+                snd:play_at_pos(npc,npc:position(),0,sound_object.s3d)
+                scan_voice_refs[npc:id()]=snd
+            end)
+            if ok then log("native Clear Sky completion voice: %s",path);return end
+            log("native Clear Sky completion voice failed: %s",tostring(err))
+        end
+    end
+    log("native Clear Sky completion voice asset not found")
+end
+
+local function anomaly(name)
+    local record = db.anomaly_by_name and db.anomaly_by_name[name]
+    return record and record.object
+end
+-- GAMMA calls xr_conditions.has_completed_task_prerequisites with npc=nil.
+-- Use the trader when available, otherwise the actor who is talking to the giver.
+-- We still require a REAL ISG-owned base on this level; no cross-level spawning.
+local function local_isg_base(giver)
+    if not (enabled() and SIMBOARD and SIMBOARD.smarts_by_names) then return nil end
+    local talker = giver
+    if not talker and mob_trade and mob_trade.GetTalkingNpc then
+        talker = mob_trade.GetTalkingNpc()
+    end
+    local pos = talker and talker:position() or db.actor:position()
+    local selected,dist=nil,125
+    for _,sm in pairs(SIMBOARD.smarts_by_names) do
+        if sm and sm.is_on_actor_level == true and sm.position and sm.props and (sm.props.base or 0)>0 then
+            local owner=sm.owning_faction or (smart_terrain_warfare and smart_terrain_warfare.smart_owners and smart_terrain_warfare.smart_owners[sm.id])
+            if owner=="isg" then
+                local d=sm.position:distance_to(pos)
+                if d<dist then selected=sm;dist=d end
+            end
+        end
+    end
+    return selected
+end
+
+local function qualified_measure_targets(home)
+    if not (enabled() and home and home.position) then return {} end
+    local result={}
+    local actor_pos=db.actor:position()
+    for name,record in pairs(db.anomaly_by_name or {}) do
+        if type(name)=="string" and record and record.object then
+            local ok,pos=pcall(function() return record.object:position() end)
+            if ok and pos and pos:distance_to(actor_pos)>=25
+                and pos:distance_to(home.position)>=35
+                and pos:distance_to(home.position)<=2400 then
+                result[#result+1]=name
+            end
+        end
+    end
+    return result
+end
+-- Version 0.9.10: the stock Clear Sky escort never creates a synthetic
+-- two-point patrol around anomalies.  v0.9.9 did, causing long oscillating
+-- movement (and a 4200-second wait) before the actual 900-second scan.
+-- Keep a cleanup routine for saves already inside that legacy patrol.
+local function clear_measure_patrol(npc)
+    if not npc then return end
+    if npc:has_info("npcx_beh_patrol_mode") then
+        npc:disable_info_portion("npcx_beh_patrol_mode")
+    end
+    if se_save_var then
+        for i=1,2 do se_save_var(npc:id(),npc:name(),"pathpoint"..i,nil) end
+    end
+    save_var(npc,"path_index",1)
+    put(PATROL_READY,false)
+end
+local function setup_measure_patrol(actor,npc,p)
+    -- Backward compatibility only. This effect no longer appears in the LTX.
+    if npc and dialog_npc_is(MSQUAD,npc) then clear_measure_patrol(npc) end
+end
+local function patrol_ready(actor,npc,p)
+    return false -- Retained to avoid undefined condition on an old loaded save.
+end
+local function end_measure_patrol(actor,npc,p)
+    if npc and dialog_npc_is(MSQUAD,npc) then clear_measure_patrol(npc) end
+end
+
+local function measure_distance_ok(npc)
+    local name = state(M_TARGET)
+    local obj = name and anomaly(name)
+    if not (npc and obj and db.actor) then return false end
+    local p = obj:position()
+    return npc:position():distance_to(p) <= 14 and db.actor:position():distance_to(p) <= 35
+end
+
+-- Condition for the stock companion behavior LTX.
+local function measure_near(actor,npc,p)
+    return active(MEASURE) and state(M_LEVEL)==level.name() and measure_distance_ok(npc)
+end
+-- A scientist completes the survey in the field, but is debriefed back at
+-- the mission's originating UNISG base.  Save the exact handoff point rather
+-- than assuming a multi-storey smart terrain's origin is inside the base.
+local function set_rendezvous(key,giver)
+    local obj=giver or db.actor
+    local pos=obj and obj:position()
+    if pos then put(key,{x=pos.x,y=pos.y,z=pos.z,level=level.name()}) end
+end
+local function back_at_base(key,npc)
+    if not npc or not db.actor then return false end
+    local point=state(key)
+    if type(point)~="table" or point.level~=level.name() then return false end
+    local p=vector():set(point.x,point.y,point.z)
+    -- The actual handoff point may be several rooms away from the base entrance.
+    -- Keep actor and escort together, on the same level, inside the HQ area.
+    return npc:position():distance_to(p)<=85
+        and db.actor:position():distance_to(p)<=85
+        and npc:position():distance_to(db.actor:position())<=16
+end
+local function measure_at_home(actor,npc,p)
+    return active(MEASURE) and state(M_FINISHED,false)==true
+        and back_at_base(M_MEET,npc)
+end
+-- The scientist follows the actor home after completing the survey.
+-- No intermediate dialogue can collide with the base debrief.
+local function research_at_home(actor,npc,p)
+    return active(RESEARCH) and state(R_DONE,false)==true
+        and back_at_base(R_MEET,npc)
+end
+
+local function measure_finished(actor,npc,p)
+    return state(M_FINISHED,false) == true
+end
+local function research_finished(actor,npc,p)
+    return state(R_DONE,false)==true
+end
+local function research_active(actor,npc,p)
+    return active(RESEARCH) and state(R_DONE,false) ~= true
+end
+-- Companion sections must be visible in the merged system.ini (ini_sys).
+-- If an incompatible mod hides them, never offer a quest that will auto-fail.
+local function companion_section_exists(name)
+    return ini_sys and ini_sys.section_exist and ini_sys:section_exist(name) == true
+end
+local function measure_available(actor,npc,p)
+    if not companion_section_exists(MSQUAD) or not science_slot_available(MEASURE) then return false end
+    if state("task_target_anomaly") or state("task_target_anomaly_level") then return false end
+    local home=local_isg_base(npc)
+    return home ~= nil and #qualified_measure_targets(home)>0
+end
+local function research_available(actor,npc,p)
+    return companion_section_exists(RSQUAD) and science_slot_available(RESEARCH)
+        and local_isg_base(npc) ~= nil
+end
+
+local cleanup_measure
+local cleanup_research
+
+local function remove_companion(name)
+    if squad(name) and xr_effects and xr_effects.remove_squad then
+        xr_effects.remove_squad(db.actor,nil,{name})
+    end
+end
+
+local function fade_release_companion(name)
+    local sq=squad(name)
+    if not sq then return end
+    -- Stock GAMMA callback used by the Clear Sky escort: black.ppe then remove_squad.
+    if xr_effects and xr_effects.remove_special_task_squad then
+        xr_effects.remove_special_task_squad(db.actor,nil,{name})
+    else
+        remove_companion(name)
+    end
+end
+
+local function start_measure(actor,npc,p)
+    if not enabled() then return end
+    if not science_slot_available(MEASURE) then
+        log("BLOCKED Protocol Contour: another science escort is active")
+        return
+    end
+    if not companion_section_exists(MSQUAD) then
+        log("measure refused: companion section is missing from system.ini: %s", MSQUAD)
+        return
+    end
+    local home=local_isg_base(npc)
+    local candidates=qualified_measure_targets(home)
+    if not home or #candidates==0 or state("task_target_anomaly") or state("task_target_anomaly_level") then
+        log("measure not started: no friendly local base, anomaly or available escort slot")
+        return
+    end
+    -- Rotate among the eligible anomalies on this level. A repeated contract
+    -- should not keep choosing the same two nearby zones when more exist.
+    -- Never synthesize a target: only use real, loaded anomaly objects.
+    local history=state(M_RECENT_TARGETS,{})
+    if type(history)~="table" then history={} end
+    local recent=history[level.name()] or {}
+    local eligible={}
+    local used={}
+    for _,name in ipairs(recent) do used[name]=true end
+    for _,name in ipairs(candidates) do
+        if not used[name] then eligible[#eligible+1]=name end
+    end
+    if #eligible==0 then eligible=candidates;recent={} end
+    local picked=eligible[math.random(#eligible)]
+    recent[#recent+1]=picked
+    -- Trim history instead of permanently exhausting the pool.
+    while #recent>math.min(5,math.max(1,#candidates-1)) do table.remove(recent,1) end
+    history[level.name()]=recent
+    put(M_RECENT_TARGETS,history)
+    log("Contour eligible anomalies=%d fresh=%d selected=%s",#candidates,#eligible,picked)
+    put(OPERATION,MEASURE)
+    set_expedition_busy()
+    put(M_TARGET,picked);put(M_FINISHED,false);put(M_CONFIRMED,false);put(M_ARRIVAL,false)
+    put(PATROL_READY,false)
+    begin_dialog_state({M_ACCEPTED,M_INTRO_REQUEST,M_REPORT_READY,M_REPORT_REQUEST,M_DEBRIEF_INFO})
+    put(M_HOME,home:name());put(M_LEVEL,level.name());put(M_RETURN,nil)
+    set_rendezvous(M_MEET,npc)
+    -- Stock axr_beh reads this shared AI target. The precondition blocks vanilla escort overlap.
+    put("task_target_anomaly",picked)
+    put("task_target_anomaly_level",level.name())
+    put("task_target_anomaly_analyzed","not_analyzed")
+    xr_effects.setup_companion_task(actor,npc,{MSQUAD,home:name()})
+    log("measure start map=%s home=%s anomaly=%s",level.name(),home:name(),picked)
+end
+
+cleanup_measure = function(actor,npc,p,failed)
+    local researcher=squad_npc(MSQUAD)
+    if researcher and state(PATROL_READY,false) then clear_measure_patrol(researcher) end
+    put(PATROL_READY,nil)
+    if failed then remove_companion(MSQUAD) else fade_release_companion(MSQUAD) end
+    put(M_RETURN,nil);put(M_HOME,nil)
+    dialog_completion_due[MEASURE]=nil
+    -- The anomaly AI target is shared with vanilla scientists; only clear our own.
+    if state("task_target_anomaly")==state(M_TARGET) then
+        put("task_target_anomaly",nil)
+        put("task_target_anomaly_level",nil)
+        put("task_target_anomaly_analyzed",nil)
+    end
+    put(M_TARGET,nil);put(M_FINISHED,nil);put(M_CONFIRMED,nil)
+    put(M_ARRIVAL,nil);put(M_LEVEL,nil);put(M_MEET,nil)
+    clear_dialog_flags({M_ACCEPTED,M_INTRO_REQUEST,M_REPORT_READY,M_REPORT_REQUEST,M_DEBRIEF_INFO})
+    if state(OPERATION)==MEASURE then put(OPERATION,nil);release_expedition_busy() end
+    -- Refresh the native PDA taskboard after handoff, when actor is not in dialogue.
+    -- The old offer was removed from its cache when Contour was accepted.
+    pending_board_refresh=time_global()+4000
+    log("measure slot released; PDA science offers scheduled to refresh")
+end
+local function finish_measure(actor,npc,p) cleanup_measure(actor,npc,p,false) end
+local function abort_measure(actor,npc,p) cleanup_measure(actor,npc,p,true) end
+
+local function start_research(actor,npc,p)
+    research_wait_log=0
+    if not enabled() then return end
+    if not science_slot_available(RESEARCH) then
+        log("BLOCKED Biological Reconnaissance: another science escort is active")
+        return
+    end
+    if not companion_section_exists(RSQUAD) then
+        log("research refused: companion section is missing from system.ini: %s", RSQUAD)
+        return
+    end
+    local home=local_isg_base(npc)
+    if not home then log("research not started: no local ISG base");return end
+    put(OPERATION,RESEARCH)
+    set_expedition_busy()
+    put(R_COUNT,0);put(R_QUEUE,{});put(R_DONE,false);put(R_CONFIRMED,false);put(R_NEXT,0);put(R_ARRIVAL,false)
+    put(R_FOCUS,nil);put(R_PHASE,"idle");put(R_PHASE_AT,0);put(R_NEAR_AT,0);put(R_STUDIED,{});put(RESEARCH_PROXIMITY,{})
+    begin_dialog_state({R_ACCEPTED,R_INTRO_REQUEST,R_REPORT_READY,R_REPORT_REQUEST,R_DEBRIEF_INFO})
+    put(R_HOME,home:name());put(R_LEVEL,level.name());put(R_RETURN,nil)
+    set_rendezvous(R_MEET,npc)
+    xr_effects.setup_companion_task(actor,npc,{RSQUAD,home:name()})
+    log("research start map=%s home=%s corpses=%d",level.name(),home:name(),R_LIMIT)
+end
+local function research_clear_waypoint(npc)
+    if not npc then return end
+    if se_save_var then
+        se_save_var(npc:id(),npc:name(),"pathpoint1",nil)
+    end
+    save_var(npc,"path_index",1)
+end
+
+cleanup_research = function(actor,npc,p,failed)
+    research_wait_log=0
+    research_clear_waypoint(squad_npc(RSQUAD))
+    if failed then remove_companion(RSQUAD) else fade_release_companion(RSQUAD) end
+    put(R_RETURN,nil);put(R_HOME,nil);put(RESEARCH_PROXIMITY,nil)
+    dialog_completion_due[RESEARCH]=nil
+    put(R_QUEUE,{});put(R_COUNT,nil);put(R_DONE,nil);put(R_CONFIRMED,nil);put(R_NEXT,nil)
+    put(R_FOCUS,nil);put(R_PHASE,nil);put(R_PHASE_AT,nil);put(R_NEAR_AT,nil);put(R_STUDIED,nil)
+    put(R_ARRIVAL,nil);put(R_LEVEL,nil);put(R_MEET,nil)
+    clear_dialog_flags({R_ACCEPTED,R_INTRO_REQUEST,R_REPORT_READY,R_REPORT_REQUEST,R_DEBRIEF_INFO})
+    if state(OPERATION)==RESEARCH then put(OPERATION,nil);release_expedition_busy() end
+    pending_board_refresh=time_global()+4000
+    log("research slot released; PDA science offers scheduled to refresh")
+end
+local function finish_research(actor,npc,p) cleanup_research(actor,npc,p,false) end
+local function abort_research(actor,npc,p) cleanup_research(actor,npc,p,true) end
+
+-- XML dialogue preconditions and on-final-line actions. Dialogue execution
+-- belongs to the real quest scientist; never let an unrelated NPC finalize it.
+function measure_intro_available(actor,npc)
+    return enabled() and active(MEASURE) and dialog_npc_is(MSQUAD,npc)
+        and not (db.actor and db.actor:has_info(M_ACCEPTED))
+end
+function measure_report_available(actor,npc)
+    return enabled() and active(MEASURE) and dialog_npc_is(MSQUAD,npc)
+        and measure_at_home(actor,npc)
+        and not state(M_CONFIRMED,false)
+end
+function research_intro_available(actor,npc)
+    return enabled() and active(RESEARCH) and dialog_npc_is(RSQUAD,npc)
+        and not (db.actor and db.actor:has_info(R_ACCEPTED))
+end
+function research_report_available(actor,npc)
+    return enabled() and active(RESEARCH) and dialog_npc_is(RSQUAD,npc)
+        and research_at_home(actor,npc) and not state(R_CONFIRMED,false)
+end
+function confirm_measure_report(actor,npc)
+    if enabled() and active(MEASURE) and dialog_npc_is(MSQUAD,npc)
+        and state(M_FINISHED,false) then
+        put(M_CONFIRMED,true)
+        dialog_completion_due[MEASURE]=time_global()+1500
+        log("measure report acknowledged; task queued for completion")
+    end
+end
+function confirm_research_report(actor,npc)
+    if enabled() and active(RESEARCH) and dialog_npc_is(RSQUAD,npc)
+        and state(R_DONE,false) then
+        put(R_CONFIRMED,true)
+        dialog_completion_due[RESEARCH]=time_global()+1500
+        log("biological report acknowledged; task queued for completion")
+    end
+end
+
+local function measure_target(id,field,p,task)
+    if not enabled() then return nil end
+    -- Following a completed Contour survey, the task marker must lead to
+    -- the expedition's ORIGINAL UNISG issuing base, not to the field agent.
+    if state(M_FINISHED,false)==true then
+        local home_name=state(M_HOME)
+        local home=home_name and SIMBOARD and SIMBOARD.smarts_by_names
+            and SIMBOARD.smarts_by_names[home_name]
+        if home and home.id then return home.id end
+    end
+    local sq=squad(MSQUAD)
+    local com=squad_npc(MSQUAD)
+    if sq and (not com or com:position():distance_to(db.actor:position()) > 45) then
+        return sq.id
+    end
+    if state(M_FINISHED,false) then return sq and sq.id or nil end
+    local obj=anomaly(state(M_TARGET))
+    if obj then return obj:id() end
+    return sq and sq.id or nil
+end
+local function measure_status(task,id)
+    if enabled() and state(M_CONFIRMED,false)==true
+        and dialog_completion_due[MEASURE] and time_global()>=dialog_completion_due[MEASURE] then
+        return "complete"
+    end
+end
+local function research_target(id,field,p,task)
+    -- Once the biological survey is complete, point at the SAME UNISG base
+    -- where the expedition was issued, exactly as the native escort tasks do.
+    -- SIMBOARD's smart ID is a real persistent ALife target, unlike a synthetic
+    -- waypoint or the field NPC's own (constantly moving) squad marker.
+    if state(R_DONE,false)==true then
+        local home_name=state(R_HOME)
+        local home=home_name and SIMBOARD and SIMBOARD.smarts_by_names
+            and SIMBOARD.smarts_by_names[home_name]
+        if home and home.id then return home.id end
+    end
+    local sq=squad(RSQUAD)
+    return sq and sq.id or nil
+end
+local function research_status(task,id)
+    if enabled() and state(R_CONFIRMED,false)==true
+        and dialog_completion_due[RESEARCH] and time_global()>=dialog_completion_due[RESEARCH] then
+        return "complete"
+    end
+end
+
+local function monster_death(monster)
+    if not (monster and active(RESEARCH) and state(R_LEVEL)==level.name()
+        and not state(R_DONE,false)) then return end
+    local com=squad_npc(RSQUAD)
+    if not com then return end
+    local pos=monster:position()
+    if pos:distance_to(com:position()) > 85 then return end
+    local entries=state(R_QUEUE,{})
+    if type(entries) ~= "table" then entries={} end
+    local id=monster:id()
+    local completed=state(R_STUDIED,{})
+    if type(completed)=="table" and completed[tostring(id)] then return end
+    for _,entry in ipairs(entries) do
+        if entry.id == id then return end
+    end
+    if #entries >= 30 then table.remove(entries,1) end
+    entries[#entries+1]={id=id,x=pos.x,y=pos.y,z=pos.z,seen=0,level=level.name()}
+    put(R_QUEUE,entries)
+    log("research corpse queued id=%d pending=%d",id,#entries)
+end
+
+-- GAMMA artefact item configs define tier=1 and tier=2 explicitly.
+-- Reward is tied to the *issuing level*, not to the player's current map.
+local SOUTH_REWARDS = {
+    "af_ball", "af_moh", "af_kogot", "af_peas", "af_ear",
+    "af_tapeworm", "af_kislushka", "af_repei",
+}
+local NORTH_REWARDS = {
+    "af_ball", "af_moh", "af_peas", "af_kogot", -- tier 1
+    "af_medusa", "af_blood", "af_cristall_flower", "af_itcher",
+    "af_electra_sparkler", "af_dummy_glassbeads", "af_mincer_meat", -- tier 2
+}
+local NORTHERN_LEVELS = {
+    jupiter=true, zaton=true, pripyat=true, l11_pripyat=true,
+    l10_limansk=true, l10_red_forest=true, l10_radar=true,
+    l09_deadcity=true, l07_military=true, l12_stancia=true,
+    l12_stancia_2=true, generators=true, l11_hospital=true,
+    labx8=true,
+}
+local function reward_local_artifact(actor,npc,p)
+    if not enabled() or not db.actor then return end
+    local mission_level=state(M_LEVEL,level.name())
+    local northern=NORTHERN_LEVELS[mission_level] == true
+    local choices=northern and NORTH_REWARDS or SOUTH_REWARDS
+    local section=choices[math.random(#choices)]
+    if xr_effects and xr_effects.reward_item then
+        xr_effects.reward_item(actor,npc,{section})
+        log("artifact reward: map=%s tier=%s item=%s",tostring(mission_level),northern and "1-2" or "1",section)
+    end
+end
+
+local function complete_task(id)
+    local t,tm=tm_task(id)
+    if t and tm then
+        log("COMPLETING task %s (confirmation received)",id)
+        tm:set_task_completed(id)
+        -- The task-manager may defer or skip our custom on_complete effects.
+        -- Always release the exclusive slot *after* it records completion;
+        -- cleanup is idempotent when the normal on_complete already ran.
+        if id == MEASURE and state(OPERATION)==MEASURE then
+            cleanup_measure(nil,nil,nil,false)
+        elseif id == RESEARCH and state(OPERATION)==RESEARCH then
+            cleanup_research(nil,nil,nil,false)
+        end
+        log("completed task %s",id)
+    else
+        log("WARNING: completion requested but task is not active: %s",id)
+    end
+end
+
+-- Called by beh_companion.ltx after GAMMA's *original* on_game_timer = 900
+-- anomaly measurement phase. The scanning state inherits invulnerable=true
+-- from beh@general_no_companion, like the Clear Sky/ecologist escort.
+local function complete_scan(actor,npc,p)
+    if not (active(MEASURE) and state(OPERATION)==MEASURE
+        and state(M_LEVEL)==level.name() and not state(M_FINISHED,false)) then return end
+    if not dialog_npc_is(MSQUAD,npc) then return end
+    put(M_FINISHED,true)
+    if db.actor then db.actor:give_info_portion(M_REPORT_READY) end
+    log("anomaly survey finished; escort researcher back for the final debrief")
+end
+
+-- v0.9.7: remove the experimental route/animation-switching bridge.
+-- v0.9.5/6 used an axr_beh waypoint without a native registered pt1 path and
+-- switched the companion away from the exact Semenov native analysis section.
+-- The v0.9.6 log held a corpse at 12m and npc_state=idle: travel never began.
+-- Never hijack its GOAP path here; leave both movement and animations to the
+-- native GAMMA mutant_corpse_analysis system in beh_companion.ltx.
+-- IMPORTANT: proximity is NOT proof of playing the native animation. Thus all
+-- credits below are explicitly described as proximity observations.
+local function research_enemy_near(npc)
+    local ok,enemy=pcall(function() return npc:best_enemy() end)
+    return ok and enemy~=nil
+end
+local function research_ai_state(npc)
+    if state_mgr and state_mgr.get_state then
+        local ok,value=pcall(state_mgr.get_state,npc)
+        if ok and value then return tostring(value) end
+    end
+    return "unknown"
+end
+-- Show the new objective once, also for older v0.9.7 saves already at 5/5.
+-- R_RETURN is a persistent one-shot transition flag, not a navigation order.
+-- Scoped native-corpse hooks, installed exactly once.  The engine's
+-- xr_corpse_detection.near_actor(corpse) lacks an NPC parameter, so changing
+-- its return globally would let EVERY stalker loot near the player.
+-- Instead, wrap the researcher evaluator for this one synchronous call.
+-- No patch to the original GAMMA/Useful Idiots source files is required.
+local native_research_lookup = false
+local scoped_corpse_hook_ready = false
+local scoped_corpse_retry_at = 0
+local function is_quest_researcher(npc)
+    if not npc then return false end
+    local our_npc=squad_npc(RSQUAD)
+    return our_npc and npc:id()==our_npc:id() and active(RESEARCH) or false
+end
+
+local function install_scoped_corpse_ai()
+    if scoped_corpse_hook_ready then return end
+    local corpse=xr_corpse_detection
+    if not (corpse and corpse.near_actor and corpse.evaluator_corpse
+        and corpse.evaluator_corpse.find_valid_target
+        and corpse.evaluator_corpse.evaluate
+        and corpse.action_search_corpse
+        and corpse.action_search_corpse.execute) then
+        log("scoped corpse AI hook unavailable (native functions not loaded)")
+        return
+    end
+    if corpse.__unisg_field_v099_scoped then
+        scoped_corpse_hook_ready=true
+        return
+    end
+    corpse.__unisg_field_v099_scoped=true
+    scoped_corpse_hook_ready=true
+    local near_actor_native=corpse.near_actor
+    corpse.near_actor=function(obj)
+        if native_research_lookup then return false end
+        return near_actor_native(obj)
+    end
+    local native_find=corpse.evaluator_corpse.find_valid_target
+    function corpse.evaluator_corpse:find_valid_target(...)
+        if not is_quest_researcher(self.object) or state(R_DONE,false) then
+            return native_find(self,...)
+        end
+        -- Keep the *native* GOAP selection, pathfinding and scanning animation.
+        -- On busy Warfare maps a freshly killed mutant may be absent from the
+        -- NPC's visible-object memory even if the body is right in front of him.
+        -- Seed only genuinely lootable bodies registered by THIS mission into
+        -- this researcher's native search-memory list. Other companions and
+        -- every global corpse-looting rule stay unchanged.
+        local memory=self.a.memory
+        if type(memory)~="table" then
+            memory={}
+            self.a.memory=memory
+            self.a.index=1
+        end
+        local known={}
+        for _,id in ipairs(memory) do known[id]=true end
+        local entries=state(R_QUEUE,{})
+        if type(entries)=="table" then
+            for _,e in ipairs(entries) do
+                local obj=e and level.object_by_id(e.id)
+                if obj and not obj:alive() and not known[e.id]
+                    and obj:position():distance_to(self.object:position())<=30
+                    and db.storage[e.id]
+                    and not db.storage[e.id].corpse_already_selected
+                    and corpse.has_valuable_loot and corpse.has_valuable_loot(obj) then
+                    memory[#memory+1]=e.id
+                    known[e.id]=true
+                end
+            end
+        end
+        native_research_lookup=true
+        -- Preserve the native evaluator's actual errors, and ALWAYS clear
+        -- the temporary flag before another NPC can evaluate a corpse.
+        local ok,result=pcall(native_find,self,...)
+        native_research_lookup=false
+        if not ok then error(result) end
+        return result
+    end
+    local native_evaluate=corpse.evaluator_corpse.evaluate
+    function corpse.evaluator_corpse:evaluate(...)
+        if is_quest_researcher(self.object) and state(R_DONE,false) then
+            return false
+        end
+        return native_evaluate(self,...)
+    end
+    local native_execute=corpse.action_search_corpse.execute
+    function corpse.action_search_corpse:execute(...)
+        -- The NPC may still be running an action selected BEFORE the fifth
+        -- study was credited.  Do not let that pending action consume a sixth.
+        if is_quest_researcher(self.object) and state(R_DONE,false) then
+            return
+        end
+        return native_execute(self,...)
+    end
+    log("scoped AI protection installed: player proximity bypass only for active UNISG biologist; no post-5th corpse action")
+end
+
+local function announce_research_return()
+    if not active(RESEARCH) or not state(R_DONE,false) or state(R_RETURN,false)==true then return end
+    put(R_RETURN,true)
+    if db.actor and news_manager and news_manager.send_tip then
+        local ok,err=pcall(function()
+            news_manager.send_tip(db.actor, game.translate_string("unisg_field_research_return_tip"), nil, nil, 9000)
+        end)
+        if not ok then log("return objective notification skipped: %s", tostring(err)) end
+    end
+    log("biological survey complete: return to originating UNISG HQ (%s) with scientist for debrief", tostring(state(R_HOME)))
+end
+
+local function update_research()
+    if not active(RESEARCH) or state(R_LEVEL)~=level.name() or state(R_DONE,false) then return end
+    local npc=squad_npc(RSQUAD)
+    if not npc then return end
+    local now=time_global()
+    local pos=npc:position()
+    local count=tonumber(state(R_COUNT,0)) or 0
+    local entries=state(R_QUEUE,{})
+    if type(entries)~="table" then entries={} end
+    local studied=state(R_STUDIED,{})
+    if type(studied)~="table" then studied={} end
+
+    -- A loaded v0.9.5/6 quest may have left axr_beh stuck on a synthetic
+    -- travel waypoint. Clear only OUR old quest target; never touch the
+    -- player's actual companion waypoints or another quest's route.
+    local oldphase=state(R_PHASE,"idle")
+    if oldphase=="approach" or oldphase=="native" then
+        research_clear_waypoint(npc)
+        put(R_FOCUS,nil);put(R_NEAR_AT,0)
+        put(R_PHASE,"native_watch");put(R_PHASE_AT,now)
+        log("legacy travel state disabled; original Semenov AI restored (reload a pre-task save if still idle)")
+    end
+
+    local changed=false
+    for i=#entries,1,-1 do
+        local e=entries[i]
+        local obj=e and e.id and level.object_by_id(e.id)
+        if not obj or obj:alive() or e.level~=level.name() or studied[tostring(e.id)] then
+            table.remove(entries,i);changed=true
+        end
+    end
+    if changed then put(R_QUEUE,entries) end
+
+    -- Native corpse-analysis owns the NPC's GOAP and actual animation.
+    -- Earlier versions used ONE shared stopwatch. When two dead mutants were
+    -- close together the chosen focus could change every update and erase the
+    -- prior body's progress. Keep independent observation time per corpse,
+    -- but NEVER force the NPC to run, teleport, or play a fake animation.
+    local proximity=state(RESEARCH_PROXIMITY,{})
+    if type(proximity)~="table" then proximity={} end
+    local enemy=research_enemy_near(npc)
+    local focus,dist=nil,99999
+    local credited=nil
+    local tracking_changed=false
+    for _,e in ipairs(entries) do
+        local obj=level.object_by_id(e.id)
+        if obj then
+            local d=pos:distance_to(obj:position())
+            if d<dist then focus=e.id;dist=d end
+            local key=tostring(e.id)
+            local rec=proximity[key]
+            if d<=RESEARCH_NEAR_DIST and not enemy then
+                if not rec then
+                    rec={time=0,last=now,away=0}
+                    proximity[key]=rec
+                    log("native observation proximity started corpse=%d distance=%.1fm (animation NOT verified)",e.id,d)
+                end
+                -- A real-time frame after loading a save must not add hours
+                -- of bogus progress. Count at most one second per tick.
+                local dt=math.max(0,math.min(1000,now-(tonumber(rec.last) or now)))
+                rec.time=(tonumber(rec.time) or 0)+dt
+                rec.last=now
+                rec.away=0
+                tracking_changed=true
+                if rec.time>=RESEARCH_STUDY_MS and now>=(tonumber(state(R_NEXT,0)) or 0) then
+                    credited=e.id
+                    break
+                end
+            elseif rec then
+                -- Combat pauses the observation instead of granting a sample.
+                -- Brief movement around a carcass is tolerated, but walking
+                -- away for more than five seconds clears the accumulated time.
+                if enemy then
+                    rec.last=now
+                elseif rec.away==0 then
+                    rec.away=now
+                    rec.last=now
+                elseif now-rec.away>5000 then
+                    proximity[key]=nil
+                end
+                tracking_changed=true
+            end
+        end
+    end
+    -- Purge timers for missing, studied or unqueued corpses.
+    local valid={}
+    for _,e in ipairs(entries) do valid[tostring(e.id)]=true end
+    for key in pairs(proximity) do
+        if not valid[key] then proximity[key]=nil;tracking_changed=true end
+    end
+    if credited then
+        local key=tostring(credited)
+        studied[key]=true
+        put(R_STUDIED,studied)
+        for i=#entries,1,-1 do
+            if entries[i].id==credited then table.remove(entries,i);break end
+        end
+        put(R_QUEUE,entries)
+        -- One specimen at a time: nearby corpses must earn their OWN full
+        -- observation interval after the preceding sample is recorded.
+        proximity={}
+        count=count+1
+        put(R_COUNT,count)
+        put(R_FOCUS,nil)
+        put(R_NEAR_AT,0)
+        put(R_NEXT,now+3000)
+        log("research sample %d/%d PROXIMITY CREDIT id=%d; native animation not independently verified",count,R_LIMIT,credited)
+        if count>=R_LIMIT then
+            put(R_DONE,true)
+            if db.actor then db.actor:give_info_portion(R_REPORT_READY) end
+            announce_research_return()
+            log("five distinct bodies recorded; escort researcher back for debrief")
+        end
+    else
+        put(R_FOCUS,focus)
+    end
+    if tracking_changed then put(RESEARCH_PROXIMITY,proximity) end
+    if state(R_DONE,false) then return end
+    if now>=research_wait_log and #entries>0 then
+        research_wait_log=now+15000
+        log("native tracking: studied=%d/%d queued=%d focus=%s dist=%.1fm state=%s enemy=%s; NO manual movement",
+            count,R_LIMIT,#entries,tostring(focus),dist,research_ai_state(npc),tostring(enemy))
+    end
+end
+
+local install_pda_science_guard
+local function tick()
+    if not enabled() then return end
+    local now=time_global()
+    if now<next_update then return end
+    next_update=now+500
+    install_pda_science_guard()
+    if pending_board_refresh and now>=pending_board_refresh
+        and db.actor and not db.actor:is_talking() then
+        pending_board_refresh=nil
+        if z_taskboard_data and z_taskboard_data.reset_taskboard then
+            local ok,err=pcall(z_taskboard_data.reset_taskboard)
+            log(ok and "PDA offers refreshed after expedition" or
+                "PDA refresh skipped: %s",tostring(err))
+        end
+    end
+    -- Upgrade an active v0.9.9 survey: clear saved pathpoints and release the
+    -- vanilla companion patrol-mode flag before the native scan state resumes.
+    if state(OPERATION)==MEASURE and state(PATROL_READY,false)==true then
+        local researcher=squad_npc(MSQUAD)
+        if researcher then
+            clear_measure_patrol(researcher)
+            log("legacy v0.9.9 survey patrol cleared; native Clear Sky scan restored")
+        end
+    end
+    -- A save can contain a completed expedition with a lingering squad / busy flag.
+    -- Do not let that stale state fail the next contract.
+    local operation=state(OPERATION)
+    if operation==MEASURE and not active(MEASURE) then
+        log("recovering stale Contour slot after completion")
+        cleanup_measure(nil,nil,nil,false)
+    elseif operation==RESEARCH and not active(RESEARCH) then
+        log("recovering stale Biological slot after completion")
+        cleanup_research(nil,nil,nil,false)
+    end
+    -- The final phrase gives an infoportion. GAMMA runs phrase actions and
+    -- callback effects with different timing; the infoportion is the reliable
+    -- confirmation, so finishing does not depend on NPC proximity a second time.
+    for _,entry in ipairs({{MEASURE,M_CONFIRMED,M_DEBRIEF_INFO,M_FINISHED},{RESEARCH,R_CONFIRMED,R_DEBRIEF_INFO,R_DONE}}) do
+        local id,flag,info,finished=entry[1],entry[2],entry[3],entry[4]
+        if active(id) and state(finished,false) and db.actor:has_info(info) and not state(flag,false) then
+            put(flag,true)
+            dialog_completion_due[id]=now+1500
+            log("final dialogue confirmed for %s via actor infoportion",id)
+        end
+    end
+    -- Post-dialog deferral prevents ending the current conversation mid-line.
+    -- The confirmed flag is saved; completion still occurs after save/load.
+    for _,entry in ipairs({{MEASURE,M_CONFIRMED},{RESEARCH,R_CONFIRMED}}) do
+        local id,flag=entry[1],entry[2]
+        if active(id) and state(flag,false) then
+            if not dialog_completion_due[id] then dialog_completion_due[id]=now+1500 end
+            if now>=dialog_completion_due[id] then
+                dialog_completion_due[id]=nil
+                complete_task(id)
+            end
+        else
+            dialog_completion_due[id]=nil
+        end
+    end
+    -- Upgrade an in-progress v0.9.7 save that had already reached five samples.
+    announce_research_return()
+    update_research()
+    -- Only one dialogue system should initiate these special conversations.
+    -- Set the quest start-dialog BEFORE opening the UI; otherwise GAMMA's
+    -- generic companion greeting ("How are you, brother?") can be selected.
+    -- The quest text, rewards and progression remain unchanged.
+    if db.actor and not db.actor:is_talking() then
+        for _,entry in ipairs({
+            {MEASURE, MSQUAD, M_ACCEPTED, M_INTRO_REQUEST,
+                M_REPORT_READY, M_REPORT_REQUEST, M_CONFIRMED, measure_at_home},
+            {RESEARCH, RSQUAD, R_ACCEPTED, R_INTRO_REQUEST,
+                R_REPORT_READY, R_REPORT_REQUEST, R_CONFIRMED, research_at_home},
+        }) do
+            local id,squad_id,intro,intro_flag=entry[1],entry[2],entry[3],entry[4]
+            if active(id) and state(OPERATION)==id then
+                local npc=squad_npc(squad_id)
+                if npc and npc:position():distance_to(db.actor:position())<=5 then
+                    local phase,flag,dialog=nil,nil,nil
+                    if not db.actor:has_info(intro) then
+                        phase="brief"; flag=intro_flag
+                        dialog=id==MEASURE and "unisg_field_measure_brief_dialog"
+                            or "unisg_field_research_brief_dialog"
+                    end
+                    -- Final handoff is initiated by beh_companion.ltx on_info2
+                    -- (=force_talk(true)), matching the original GAMMA escort.
+                    -- Lua auto-open previously logged success despite not
+                    -- reliably showing the dialogue to the player.
+                    if flag and dialog and not db.actor:has_info(flag) then
+                        local ok,err=pcall(function()
+                            npc:set_start_dialog(dialog)
+                            db.actor:run_talk_dialog(npc,true)
+                        end)
+                        if ok then
+                            db.actor:give_info_portion(flag)
+                            log("auto quest dialogue opened: %s phase=%s id=%s",id,phase,dialog)
+                        else
+                            log("auto quest dialogue failed: %s phase=%s error=%s",id,phase,tostring(err))
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local safe_arrived = {}
+local function npc_on_update(npc)
+    if not (npc and enabled() and level.name() == "jupiter") then return end
+    local actor_pos=db.actor:position()
+    local dx,dy,dz=actor_pos.x-SAFE_X,actor_pos.y-SAFE_Y,actor_pos.z-SAFE_Z
+    if dx*dx+dz*dz>40*40 or math.abs(dy)>12 then return end
+    local id=npc:id()
+    local which=nil
+    for _,s in ipairs({{MSQUAD,M_ARRIVAL,MEASURE},{RSQUAD,R_ARRIVAL,RESEARCH}}) do
+        if active(s[3]) and not state(s[2],false) and
+           state(s[1]==MSQUAD and M_HOME or R_HOME)=="jup_b208" then
+            local sq=squad(s[1])
+            if sq then
+                for m in sq:squad_members() do
+                    if m.id==id then which=s[2];break end
+                end
+            end
+        end
+        if which then break end
+    end
+    if not which or safe_arrived[id] then return end
+    if not npc:alive() then return end
+    local p=npc:position()
+    local xx,zz=p.x-SAFE_X,p.z-SAFE_Z
+    if xx*xx+zz*zz<=8*8 and math.abs(p.y-SAFE_Y)<=3 then
+        safe_arrived[id]=true
+        put(which,true)
+        return
+    end
+    local dest=vector():set(SAFE_X,SAFE_Y,SAFE_Z)
+    local lvid=level.vertex_id(dest)
+    if not lvid or lvid==0 or lvid==4294967295 then return end
+    local ok,err=pcall(function()
+        npc:set_npc_position(dest)
+        local se=alife_object(id)
+        if se then
+            se.position=dest
+            se.m_level_vertex_id=lvid
+            se.m_game_vertex_id=SAFE_GVID
+        end
+        if db.offline_objects and db.offline_objects[id] then db.offline_objects[id].level_vertex_id=lvid end
+        if db.spawned_vertex_by_id then db.spawned_vertex_by_id[id]=nil end
+    end)
+    if ok then
+        safe_arrived[id]=true
+        put(which,true)
+        log("safe arrival of companion id=%s into the Jupiter HQ",tostring(id))
+    else
+        if not warned[id] then log("safe arrival failed %s: %s",tostring(id),tostring(err));warned[id]=true end
+    end
+end
+local function npc_on_net_destroy(npc)
+    if npc then safe_arrived[npc:id()]=nil;warned[npc:id()]=nil;scan_voice_refs[npc:id()]=nil end
+end
+
+-- Dedicated PDA taskboard integration. Native task prerequisites hide the offer on
+-- refresh; this additionally prunes the *existing* visible board after acceptance
+-- and refuses a stale click before give_task (avoids instant fail + lost goodwill).
+local function pda_remove_offers(tid)
+    local board=z_taskboard_data
+    if not board then return end
+    if type(board.entry_cache)=="table" then
+        for key,item in pairs(board.entry_cache) do
+            if item and item.task_id==tid then board.entry_cache[key]=nil end
+        end
+    end
+    if type(board.board_data)=="table" then
+        for category,entries in pairs(board.board_data) do
+            for i=#entries,1,-1 do
+                local item=entries[i]
+                if item.task_id==tid then
+                    table.remove(entries,i)
+                elseif type(item.duplicates)=="table" then
+                    for di=#item.duplicates,1,-1 do
+                        if item.duplicates[di].task_id==tid then
+                            table.remove(item.duplicates,di)
+                        end
+                    end
+                    if #item.duplicates==0 then
+                        item.duplicates=nil
+                        item.has_variants=false
+                    end
+                end
+            end
+            if #entries==0 then board.board_data[category]=nil end
+        end
+    end
+    board.board_dirty=true
+end
+install_pda_science_guard = function()
+    if not z_taskboard_data or type(z_taskboard_data.accept_task)~="function"
+        or z_taskboard_data.__unisg_field_v09_guard then return end
+    local native=z_taskboard_data.accept_task
+    z_taskboard_data.accept_task=function(key)
+        local entry=z_taskboard_data.entry_cache and z_taskboard_data.entry_cache[key]
+        local tid=entry and entry.task_id
+        if tid==MEASURE or tid==RESEARCH then
+            local can_take=(tid==MEASURE and measure_available() or research_available())
+            if not can_take then
+                log("PDA stale offer removed before acceptance: %s",tid)
+                pda_remove_offers(tid)
+                return
+            end
+        end
+        native(key)
+        if tid==MEASURE or tid==RESEARCH then
+            if active(tid) and state(OPERATION)==tid then
+                pda_remove_offers(tid==MEASURE and RESEARCH or MEASURE)
+                log("PDA conflicting scientific offer hidden after accepting %s",tid)
+            end
+        end
+    end
+    z_taskboard_data.__unisg_field_v09_guard=true
+    log("PDA single-expedition guard installed")
+end
+
+function on_game_start()
+    log("squad registration check: measure=%s research=%s", tostring(companion_section_exists(MSQUAD)), tostring(companion_section_exists(RSQUAD)))
+    xr_effects.unisg_field_complete_scan=complete_scan
+    xr_effects.unisg_field_play_scan_start=play_scan_start
+    xr_effects.unisg_field_play_scan_done=play_scan_done
+    xr_effects.unisg_field_setup_patrol=setup_measure_patrol
+    xr_effects.unisg_field_end_patrol=end_measure_patrol
+    xr_conditions.unisg_field_patrol_ready=patrol_ready
+    xr_effects.unisg_field_start_measure=start_measure
+    xr_effects.unisg_field_finish_measure=finish_measure
+    xr_effects.unisg_field_abort_measure=abort_measure
+    xr_effects.unisg_field_reward_local_artifact=reward_local_artifact
+    xr_effects.unisg_field_start_research=start_research
+    xr_effects.unisg_field_finish_research=finish_research
+    xr_effects.unisg_field_abort_research=abort_research
+    xr_conditions.unisg_field_measure_available=measure_available
+    xr_conditions.unisg_field_research_available=research_available
+    xr_conditions.unisg_field_near_anomaly=measure_near
+    xr_conditions.unisg_field_measure_finished=measure_finished
+    xr_conditions.unisg_field_measure_at_home=measure_at_home
+    xr_conditions.unisg_field_research_at_home=research_at_home
+    xr_conditions.unisg_field_research_active=research_active
+    xr_conditions.unisg_field_research_finished=research_finished
+    task_functor.unisg_field_measure_target=measure_target
+    task_functor.unisg_field_research_target=research_target
+    task_status_functor.unisg_field_measure_status=measure_status
+    task_status_functor.unisg_field_research_status=research_status
+    RegisterScriptCallback("actor_on_update",tick)
+    RegisterScriptCallback("monster_on_death_callback",monster_death)
+    RegisterScriptCallback("npc_on_update",npc_on_update)
+    RegisterScriptCallback("npc_on_net_destroy",npc_on_net_destroy)
+    install_pda_science_guard()
+    install_scoped_corpse_ai()
+end

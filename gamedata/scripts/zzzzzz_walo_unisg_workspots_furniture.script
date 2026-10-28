@@ -1,0 +1,192 @@
+-- UNISG Workspots v0.2.7 furniture addon. Requires WALO 1.6.11 and GAMMA's Hideout Furniture.
+-- Spawns chairs + native interactive EFP bed on the Jupiter depot once per save.
+-- v0.2.7: activate the spawned clinic light through native Hideout Furniture state.
+-- Keeps v0.2.6 sections, geometry and NPC jobs unchanged.
+-- Does not spawn NPCs or change trading, HQ, or storyline configs.
+local SMART = "jup_b208"
+local BED_SECTION = "placeable_bed_2" -- GAMMA config: mod_system_props.ltx; built-in sleep dialog
+local LIGHT_SECTION = "placeable_light8"
+local CLINIC_SECTION = "placeable_clinic_equipments"
+local CHAIR_VISUAL = [[dynamics\warfare_props\stul_wood_01]] -- supplied by WALO
+local SAFE_INTERVAL_MS = 3000
+local P = {
+  medic = { pos = {387.457, 4.279, -125.737}, dir = {-1.000, 0.000, 0.017} },
+  barman = { pos = {424.685, 9.954, -81.688}, dir = {1.000, 0.000, 0.015} },
+  bed = { pos = {384.289, 4.408, -130.070}, dir = {-0.998, 0.000, -0.057} },
+  clinic = { pos = {382.966, 4.423, -128.728}, dir = {0.365, 0.000, -0.931} },
+  light = { pos = {382.966, 5.523, -128.728}, dir = {0.365, 0.000, -0.931} },
+}
+
+local scanned = false
+local next_try = 0
+-- Reuse the SAME storage key: do not blindly create another set of furniture.
+local KEY = "walo_unisg_workspots_furniture_v022"
+local OLD_KEYS = {"walo_unisg_workspots_furniture_v02", "walo_unisg_workspots_furniture_v021"}
+local function log(fmt, ...)
+    printf("[UNISG Workspots v0.2.7] " .. string.format(fmt, ...))
+end
+local function enabled()
+    return IsWarfare() and has_alife_info("story_mode_disabled") and not IsStoryMode()
+end
+local function vec(p)
+    return vector():set(p[1],p[2],p[3])
+end
+local function direction(p)
+    return vec(p.dir)
+end
+local function heading(p)
+    return direction(p):getH()
+end
+local function chair_pose(p)
+    local pos = p.pos
+    local d = p.dir
+    -- Keep v0.2.3 seat centre. The NPCs now sit correctly; do not shift the seats.
+    -- Only rotate the chair model 180 degrees so its backrest is behind the NPC.
+    return vector():set(pos[1] + 0.5 * d[1], pos[2], pos[3] + 0.5 * d[3]),
+        heading(p) % (2 * math.pi)
+end
+local function create_chair(p, gvid)
+    local pos, rot = chair_pose(p)
+    local lvid = warfare_utils.nearest_lvid(pos)
+    if not lvid then return nil, "no level vertex for chair" end
+    local obj = alife_create("physic_object", pos, lvid, gvid)
+    if not obj then return nil, "alife_create physic_object returned nil" end
+    obj.angle = vector():set(0, rot, 0)
+    local data = utils_stpk.get_physic_data(obj)
+    data.visual_name = CHAIR_VISUAL
+    data.fixed_bones = "link"
+    data.custom_data = "[collide]\nignore_static\n"
+    utils_stpk.set_physic_data(data, obj)
+    return obj.id
+end
+local function create_bed(p, gvid)
+    local pos = vec(p.pos)
+    local lvid = warfare_utils.nearest_lvid(pos)
+    if not lvid then return nil, "no level vertex for bed" end
+    -- Uses GAMMA's native placement API, so the bed is interactive and opens
+    -- ui_sleep_dialog.sleep_bag when the player interacts with it.
+    -- v0.2.1: rotate the bed 90 degrees relative to the sampled facing.
+    local rot = vector():set(0, (heading(p) + math.pi * 0.5) % (2 * math.pi), 0)
+    local id = placeable_furniture.create_object(BED_SECTION, pos, rot, lvid, gvid)
+    if not id then return nil, "placeable_furniture.create_object returned nil" end
+    -- Do not let the player accidentally pick up the base's permanent bed.
+    hf_obj_manager.update_data(id, { is_world_obj = true })
+    return id
+end
+
+local function create_decor(section, p, gvid)
+    -- The API takes a world object, NOT the inventory item decor_*. The latter
+    -- causes hf_furniture_types to treat an item as a hanging lamp and can crash X-Ray.
+    if section == LIGHT_SECTION then
+        if ini_sys:r_string_ex(section, "class") ~= "SO_HLAMP" then
+            return nil, "light is not a world SO_HLAMP section"
+        end
+    elseif section == CLINIC_SECTION then
+        if ini_sys:r_string_ex(section, "item_section") ~= "decor_clinic_equipments" then
+            return nil, "clinic is not the expected placeable section"
+        end
+    else
+        return nil, "unexpected decor section"
+    end
+    local pos = vec(p.pos)
+    local lvid = warfare_utils.nearest_lvid(pos)
+    if not lvid then return nil, "no level vertex for decor" end
+    local rot = vector():set(0, heading(p) % (2 * math.pi), 0)
+    local id = placeable_furniture.create_object(section, pos, rot, lvid, gvid)
+    if not id then return nil, "placeable_furniture.create_object returned nil" end
+    hf_obj_manager.update_data(id, { is_world_obj = true })
+    return id
+end
+local FURNITURE = {
+    { key = "medic_chair", section = "physic_object", place = function(gvid) return create_chair(P.medic,gvid) end },
+    { key = "barman_chair", section = "physic_object", place = function(gvid) return create_chair(P.barman,gvid) end },
+    { key = "medical_bed", section = BED_SECTION, place = function(gvid) return create_bed(P.bed,gvid) end },
+    { key = "medical_light", section = LIGHT_SECTION, place = function(gvid) return create_decor(LIGHT_SECTION,P.light,gvid) end },
+    { key = "medical_clinic_equipment", section = CLINIC_SECTION, place = function(gvid) return create_decor(CLINIC_SECTION,P.clinic,gvid) end },
+}
+
+-- A placed lamp is OFF by default: hf_furniture_types.init_light sets is_on=false.
+-- The same lamp may already be saved by v0.2.6, so do not create a second one.
+local function activate_our_light(ids)
+    if ids._light_activated_revision == "027" then return end
+    local id = ids.medical_light
+    local lamp = id and alife_object(id)
+    if not (lamp and lamp:section_name() == LIGHT_SECTION) then return end
+    local ok, err = pcall(hf_obj_manager.update_data, id, {
+        is_world_obj = true,
+        is_on = true,
+    })
+    if ok then
+        ids._light_activated_revision = "027"
+        log("medical lamp enabled id=%s", tostring(id))
+    else
+        log("WARNING cannot activate lamp id=%s err=%s", tostring(id), tostring(err))
+    end
+end
+
+local function actor_on_first_update()
+    scanned = false
+    next_try = 0
+end
+local function actor_on_update()
+    if scanned or not enabled() then return end
+    local now = time_global()
+    if now < next_try then return end
+    next_try = now + SAFE_INTERVAL_MS
+    if not (db.actor and SIMBOARD) then return end
+    local smart = warfare_utils.smart_on_actor_level(SMART)
+    if not smart then return end
+    -- Do not spawn furniture until all required modules are available.
+    if not (placeable_furniture and placeable_furniture.create_object and hf_obj_manager and
+            hf_obj_manager.update_data and utils_stpk and warfare_utils and alife_storage_manager) then
+        log("required WALO/GAMMA furniture modules unavailable; no creation")
+        scanned = true
+        return
+    end
+    scanned = true  -- One creation attempt per session: do not retry blindly on errors.
+    local storage = alife_storage_manager.get_state()
+    -- Earlier test versions used different storage keys. Refuse to add duplicates
+    -- if their tracked items are still present in this save.
+    for _, old_key in ipairs(OLD_KEYS) do
+        local old_ids = storage[old_key]
+        if type(old_ids) == "table" then
+            for _, piece in ipairs(FURNITURE) do
+                local old_obj_id = old_ids[piece.key]
+                if old_obj_id and alife_object(old_obj_id) then
+                    log("older furniture still present (%s, id=%s); no duplicate spawn. Use a pre-furniture test save to apply new poses", old_key, tostring(old_obj_id))
+                    return
+                end
+            end
+        end
+    end
+    storage[KEY] = storage[KEY] or {}
+    local ids = storage[KEY]
+    local reused_old = false
+    for _, piece in ipairs(FURNITURE) do
+        local existing = ids[piece.key] and alife_object(ids[piece.key])
+        if existing and existing:section_name() == piece.section then
+            -- Existing engine objects keep their old coordinates and heading.
+            if ids._pose_revision ~= "024" then reused_old = true end
+            log("kept %s id=%s", piece.key, tostring(ids[piece.key]))
+        else
+            -- Stores IDs persistently so reloading saves cannot duplicate furniture.
+            local ok, id, err = pcall(piece.place, smart.m_game_vertex_id)
+            if ok and id then
+                ids[piece.key] = id
+                log("created %s id=%s", piece.key, tostring(id))
+            else
+                log("ERROR %s: %s", piece.key, tostring(ok and err or id))
+            end
+        end
+    end
+    activate_our_light(ids)
+    if reused_old then
+        log("old furniture geometry preserved in save; v0.2.7 poses require a pre-furniture save (no automatic deletion)")
+    else
+        ids._pose_revision = "026"
+    end
+end
+function on_game_start()
+    RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
+    RegisterScriptCallback("actor_on_update", actor_on_update)
+end

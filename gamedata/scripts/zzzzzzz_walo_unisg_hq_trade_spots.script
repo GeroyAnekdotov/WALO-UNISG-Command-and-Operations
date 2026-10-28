@@ -1,0 +1,310 @@
+-- WALO UNISG HQ v0.7: stable native ISG trade profiles + persistent owned PDA spots.
+-- Designed for WALO 1.6.11 + GAMMA, complementary to the unchanged v0.5 warfare.script.
+-- Runs ONLY in nonscripted Warfare, ONLY for generated ISG service NPCs at jup_b208.
+-- Never creates squads, changes story flags, or replaces original trading LTX files.
+
+local HQ = "jup_b208"
+local VERSION = "0.7"
+local CHECK_MS = 6000
+local TRADE = {
+    trader   = "items\\trade\\trade_isg.ltx", -- real GAMMA ISG stock and goodwill tiers
+    mechanic = "items\\trade\\trade_generic_mechanic.ltx",
+    medic    = "items\\trade\\trade_generic_medic.ltx",
+    barman   = "items\\trade\\trade_generic_barman.ltx",
+}
+local SPOT = {
+    trader   = "ui_pda2_trader_location",
+    mechanic = "ui_pda2_mechanic_location",
+    medic    = "ui_pda2_medic_location",
+    barman   = "ui_pda2_barman_location",
+}
+local initial_trade_init, hooked_trade_init = nil, nil
+local next_check, last_log = 0, {}
+local marked = {} -- Ephemeral fallback until A-Life state is available
+local repair_status = {} -- One trade_init per on-line NPC, never per 6-second scan
+local marker_state = nil
+local MARKER_KEY = "walo_unisg_hq_owned_pda_spots_v07"
+
+-- Persist ONLY the spots created by this addon in this save. Do not adopt
+-- pre-existing icons from other mods (or untracked icons from older v0.6).
+local function owned_spots()
+    local manager = alife_storage_manager
+    if not (manager and manager.get_state) then return marked end
+    local ok, state = pcall(manager.get_state)
+    if not ok or type(state) ~= "table" then return marked end
+    if type(state[MARKER_KEY]) ~= "table" then state[MARKER_KEY] = {} end
+    local owned = state[MARKER_KEY]
+    if marker_state ~= owned then
+        for id, spot in pairs(marked) do
+            if owned[id] == nil then owned[id] = spot end
+        end
+        marker_state = owned
+    end
+    return owned
+end
+
+local function log_once(key, fmt, ...)
+    if last_log[key] then return end
+    last_log[key] = true
+    if printf then printf("[WALO UNISG services v%s] " .. fmt, VERSION, ...) end
+end
+
+local function active()
+    if not (IsWarfare and IsWarfare() and IsStoryMode and not IsStoryMode()) then
+        return false
+    end
+    return db and db.actor and has_alife_info and has_alife_info("story_mode_disabled") == true
+end
+
+local function role_for_npc(npc)
+    if not npc then return nil end
+    -- The generated NPC's name has the numerical instance suffix; its
+    -- character section (if exposed by the engine) can be unsuffixed.
+    local sec, name
+    if npc.section then
+        local ok, val = pcall(function() return npc:section() end)
+        if ok then sec = val end
+    end
+    if npc.name then
+        local ok, val = pcall(function() return npc:name() end)
+        if ok then name = val end
+    end
+    for _, candidate in ipairs({sec or "", name or ""}) do
+        if type(candidate) ~= "string" then candidate = "" end
+        local found = candidate:match("^sim_default_isg_(trader)[%d_]*$")
+            or candidate:match("^sim_default_isg_(mechanic)[%d_]*$")
+            or candidate:match("^sim_default_isg_(medic)[%d_]*$")
+            or candidate:match("^sim_default_isg_(barman)[%d_]*$")
+        if found then return found end
+    end
+    return nil
+end
+
+local function get_hq()
+    if not SIMBOARD then return nil end
+    local smart = SIMBOARD.smarts_by_names and SIMBOARD.smarts_by_names[HQ]
+    if type(smart) == "number" and alife_object then smart = alife_object(smart) end
+    if not smart and SIMBOARD.get_smart_by_name then
+        smart = SIMBOARD:get_smart_by_name(HQ)
+    end
+    return smart
+end
+
+local function assigned_smart(npc)
+    if not npc then return nil end
+    local id = npc:id()
+    local st = db and db.storage and db.storage[id]
+    if st and st.gulag_name and st.gulag_name ~= "" then return st.gulag_name end
+    if xr_gulag and xr_gulag.get_npc_smart then
+        local ok, smart = pcall(xr_gulag.get_npc_smart, npc)
+        if ok and smart then
+            for _, method in ipairs({"name", "section_name"}) do
+                if smart[method] then
+                    local ok_name, value = pcall(function() return smart[method](smart) end)
+                    if ok_name and value and value ~= "" then return value end
+                end
+            end
+        end
+    end
+    if alife_object then
+        local ok, se = pcall(alife_object, id)
+        if ok and se and se.m_smart_terrain_id and se.m_smart_terrain_id ~= 65535 then
+            local ok_s, smart = pcall(alife_object, se.m_smart_terrain_id)
+            if ok_s and smart then
+                for _, method in ipairs({"name", "section_name"}) do
+                    if smart[method] then
+                        local ok_name, value = pcall(function() return smart[method](smart) end)
+                        if ok_name and value and value ~= "" then return value end
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function board_squads()
+    local smart = get_hq()
+    local board = smart and SIMBOARD.smarts and SIMBOARD.smarts[smart.id]
+    return board and board.squads
+end
+
+local function in_hq_squads(id)
+    local squads = board_squads()
+    if not squads then return false end
+    for sid in pairs(squads) do
+        local squad = sid and alife_object(sid)
+        if squad and squad.squad_members then
+            for member in squad:squad_members() do
+                if member.id == id then return true end
+            end
+        end
+    end
+    return false
+end
+
+local function is_hq_service(npc, role)
+    if not (active() and role and npc) then return false end
+    local smart = assigned_smart(npc)
+    if smart == HQ then return true end
+    -- Early trade_init often precedes gulag_name assignment. Use the
+    -- already-registered WALO squad roster, not a radius guess.
+    return in_hq_squads(npc:id())
+end
+
+local function normalize(path)
+    if type(path) ~= "string" then return nil end
+    return path:lower():gsub("/", "\\")
+end
+
+local function profile_of(id)
+    if not (trade_manager and trade_manager.get_trade_profile) then return nil end
+    local ok, value = pcall(trade_manager.get_trade_profile, id, "cfg_ltx")
+    if ok then return value end
+end
+
+local function repair_profile(npc, role)
+    if not (trade_manager and trade_manager.trade_init and trade_manager.update) then return end
+    local id, desired = npc:id(), TRADE[role]
+    local status = repair_status[id]
+    if status and status.role ~= role then status = nil; repair_status[id] = nil end
+    if status and status.completed then return end
+
+    -- trade_init may succeed even when GAMMA cannot expose cfg_ltx through
+    -- get_trade_profile(). Never reinitialize an NPC every scan in that case.
+    if not status or not status.initialized then
+        local current = profile_of(id)
+        if normalize(current) == normalize(desired) then
+            repair_status[id] = {role = role, completed = true}
+            return
+        end
+        local ok, err = pcall(trade_manager.trade_init, npc, desired)
+        if not ok then
+            log_once("repair_error_" .. tostring(id), "trade init error npc=%s role=%s: %s",
+                tostring(id), role, tostring(err))
+            return
+        end
+        status = {role = role, initialized = true}
+        repair_status[id] = status -- committed BEFORE update to avoid double init
+        log_once("profile_" .. tostring(id), "profile assigned id=%s role=%s old=%s desired=%s",
+            tostring(id), role, tostring(current), tostring(desired))
+    end
+    local ok, err = pcall(trade_manager.update, npc, true)
+    if not ok then
+        log_once("update_error_" .. tostring(id), "trade update error npc=%s role=%s: %s",
+            tostring(id), role, tostring(err))
+        return -- retry update only, NEVER trade_init again
+    end
+    status.completed = true
+end
+
+local function install_trade_hook()
+    if not (trade_manager and type(trade_manager.trade_init) == "function") then return end
+    if hooked_trade_init then return end
+    initial_trade_init = trade_manager.trade_init
+    hooked_trade_init = function(npc, ini, ...)
+        local role = role_for_npc(npc)
+        if role and is_hq_service(npc, role) then
+            ini = TRADE[role]
+        end
+        return initial_trade_init(npc, ini, ...)
+    end
+    trade_manager.trade_init = hooked_trade_init
+    log_once("hook", "trade_init hook installed")
+end
+
+local function update_services()
+    if not active() then return end
+    install_trade_hook()
+    local squads = board_squads()
+    if not squads then
+        log_once("board", "jup_b208 squad roster unavailable; will retry")
+        return
+    end
+    local seen = {}
+    local online_seen = {}
+    local owned = owned_spots()
+    local found, online_count = 0, 0
+    local sim = alife()
+    for sid in pairs(squads) do
+        local squad = sid and alife_object(sid)
+        if squad and squad.squad_members then
+            for member in squad:squad_members() do
+                local id = member.id
+                local server = member.object or (id and sim:object(id))
+                if id and server and server.alive then
+                    local online = level.object_by_id(id)
+                    local role = role_for_npc(online)
+                    if not role and server.name then
+                        local ok, name = pcall(function() return server:name() end)
+                        if ok and name then
+                            role = name:match("^sim_default_isg_(trader)[%d_]*$")
+                                or name:match("^sim_default_isg_(mechanic)[%d_]*$")
+                                or name:match("^sim_default_isg_(medic)[%d_]*$")
+                                or name:match("^sim_default_isg_(barman)[%d_]*$")
+                        end
+                    end
+                    if role then
+                        found = found + 1
+                        if online then
+                            online_count = online_count + 1
+                            online_seen[id] = true
+                            repair_profile(online, role)
+                        end
+                        local spot = SPOT[role]
+                        seen[id] = spot
+                        if level.map_has_object_spot(id, spot) == 0 then
+                            local label = role
+                            if online and online.character_name then
+                                local ok_name, value = pcall(function() return online:character_name() end)
+                                if ok_name and value then label = value end
+                            end
+                            level.map_add_object_spot_ser(id, spot, label)
+                            owned[id] = spot
+                            log_once("spot_" .. tostring(id), "PDA spot id=%s role=%s spot=%s", tostring(id), role, spot)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    log_once("scan_summary", "service scan jup_b208: found=%d online=%d (trade repairs require online NPCs)", found, online_count)
+    -- Clear the one-time online repair guard when the NPC goes offline, dies,
+    -- leaves the smart or despawns. A newly online incarnation can be repaired.
+    for id in pairs(repair_status) do
+        if not online_seen[id] then repair_status[id] = nil end
+    end
+
+    -- Delete only markers recorded as OURS in this particular save.
+    -- Markers from older v0.6 saves, when provenance wasn't persisted, are
+    -- deliberately not adopted or deleted to protect icons owned by other mods.
+    for id, spot in pairs(owned) do
+        if seen[id] ~= spot then
+            if level.map_has_object_spot(id, spot) ~= 0 then
+                level.map_remove_object_spot(id, spot)
+            end
+            owned[id] = nil
+            marked[id] = nil
+        end
+    end
+end
+
+local function tick()
+    if not active() then return end
+    local now = time_global()
+    if now < next_check then return end
+    next_check = now + CHECK_MS
+    -- A temporary NPC/smart-graph glitch must not crash the whole session.
+    local ok, err = pcall(update_services)
+    if not ok then log_once("scan_error", "service scan error: %s", tostring(err)) end
+end
+
+function on_game_start()
+    next_check, last_log, marked = 0, {}, {}
+    repair_status, marker_state = {}, nil
+    -- Hooks stay chained throughout the process; do not stack wrappers when
+    -- loading another save. Every invocation has its own Story/Warfare gate.
+    install_trade_hook()
+    RegisterScriptCallback("actor_on_first_update", tick)
+    RegisterScriptCallback("actor_on_update", tick)
+end

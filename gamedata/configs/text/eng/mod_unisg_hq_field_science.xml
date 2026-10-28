@@ -1,0 +1,96 @@
+<?xml version='1.0' encoding='utf-8'?>
+<string_table>
+  <string id="unisg_field_measure_title">
+    <text>Protocol: Contour</text>
+  </string>
+  <string id="unisg_field_measure_descr">
+    <text>Directive K-07. By order of Colonel George Pattonov, escort a UNISG field analyst to a suitable anomaly on the current level. Secure the site, hold the perimeter throughout the survey, and return the analyst to the issuing base with the encrypted report. Lethal force is authorized against immediate threats.</text>
+  </string>
+  <string id="unisg_field_measure_about">
+    <text>UNISG | FIELD OPERATIONS COMMAND\nDirective K-07: CONTOUR\nIssued by Colonel George Pattonov\n\nMission purpose: obtain reliable readings of spatial distortions and anomalous energy fluctuations. The data will be used to revise operational maps and identify sectors unsuitable for routine deployment.\n\nThe escort unit will deliver the field analyst to the designated anomaly, secure the survey site, and hold the perimeter until the measurement cycle is complete. Lethal force is authorized against immediate threats. Ammunition expenditure must still be entered on the appropriate form.\n\nOnce the survey is complete, bring the analyst back to the originating UNISG headquarters and submit the encrypted field package for command review.\n\nCommand note: this operation falls within acceptable risk parameters. The criteria used to determine acceptability remain classified.</text>
+  </string>
+  <string id="unisg_field_measure_finish">
+    <text>The analyst has confirmed the readings and secured the encrypted field report. Assignment closed.</text>
+  </string>
+  <string id="unisg_field_research_title">
+    <text>Biological Reconnaissance</text>
+  </string>
+  <string id="unisg_field_research_descr">
+    <text>Field Order BIO-05. Professor Nikola Teslenko requires a security escort for a UNISG biologist operating in mutant territory. Five fresh, previously unexamined carcasses must be studied on site. Kills alone do not satisfy the order. After the fifth survey, return the scientist to the original UNISG base for debriefing.</text>
+  </string>
+  <string id="unisg_field_research_about">
+    <text>UNISG | SCIENTIFIC OPERATIONS DIVISION\nField Order BIO-05\nIssued by Professor Nikola Teslenko, Director of Research\n\nThe current mutant taxonomy has been declared inadequate for operational use. Five fresh, previously unexamined carcasses are required for an on-site biological survey in active mutant habitats. Laboratory samples alone will not satisfy this requirement.\n\nSecurity personnel are to escort the field biologist, maintain a safe examination perimeter, and allow the specialist to inspect each specimen personally. Authorized scientific staff will handle all collection and documentation. Lethal force is permitted against immediate threats to the expedition.\n\nWhere practical, please return specimens with the major anatomical structures intact. The Research Division notes that heads are particularly useful for identifying what has just attempted to eat you.\n\nFollowing five examinations, return the specialist to the original UNISG headquarters for debriefing and sample processing. Loss of the biologist is strongly discouraged: replacement training is expensive, and the incident-report package is worse.</text>
+  </string>
+  <string id="unisg_field_research_finish">
+    <text>Five bodies examined and the biological report secured. The field assignment is complete.</text>
+  </string>
+  <string id="unisg_field_measure_brief_0">
+    <text>You are the analyst assigned to the anomaly survey?</text>
+  </string>
+  <string id="unisg_field_measure_brief_1">
+    <text>Yes. Keep my name off the open channel. I have a calibrated probe and an anomaly the Directorate wants mapped.</text>
+  </string>
+  <string id="unisg_field_measure_brief_2">
+    <text>What do you need from me?</text>
+  </string>
+  <string id="unisg_field_measure_brief_3">
+    <text>A clear approach and a quiet perimeter. One stray bullet can ruin the readings. Once I start the scan, stay close until the data series is complete.</text>
+  </string>
+  <string id="unisg_field_measure_brief_4">
+    <text>Understood. I will secure the route.</text>
+  </string>
+  <string id="unisg_field_measure_brief_5">
+    <text>Then we move. Your orders come from the same people as mine.</text>
+  </string>
+  <string id="unisg_field_measure_debrief_0">
+    <text>We are back at headquarters. Is the survey package ready for command?</text>
+  </string>
+  <string id="unisg_field_measure_debrief_1">
+    <text>Ready and encrypted. The anomaly shifted twice during the run, so I included the unprocessed readings as well as the final analysis.</text>
+  </string>
+  <string id="unisg_field_measure_debrief_2">
+    <text>Transmit it over the secure channel. That concludes the escort assignment.</text>
+  </string>
+  <string id="unisg_field_measure_debrief_3">
+    <text>Transfer confirmed, mission closed, payment authorized. Colonel Pattonov also wants an ammunition report, including if you used none.</text>
+  </string>
+  <string id="unisg_field_research_brief_0">
+    <text>You are the biologist? I was told you needed protection.</text>
+  </string>
+  <string id="unisg_field_research_brief_1">
+    <text>Protection, yes. And patience. Command wants field observations, not bags of mutant parts with no context.</text>
+  </string>
+  <string id="unisg_field_research_brief_2">
+    <text>How many samples are we talking about?</text>
+  </string>
+  <string id="unisg_field_research_brief_3">
+    <text>Five fresh bodies. Put the mutants down, then give me room to examine them. If I cannot reach a specimen, it does not count.</text>
+  </string>
+  <string id="unisg_field_research_brief_4">
+    <text>I will keep them off you. Do not wander off.</text>
+  </string>
+  <string id="unisg_field_research_brief_5">
+    <text>Agreed. Five examinations and we both get to go home. Preferably with all our limbs.</text>
+  </string>
+  <string id="unisg_field_research_debrief_0">
+    <text>We made it back. Have all five samples been logged?</text>
+  </string>
+  <string id="unisg_field_research_debrief_1">
+    <text>Every one of them. Two specimens already challenge our existing classification. Professor Teslenko will finally have something worth reading.</text>
+  </string>
+  <string id="unisg_field_research_debrief_2">
+    <text>File the report with Research. My security detail is standing down.</text>
+  </string>
+  <string id="unisg_field_research_debrief_3">
+    <text>Report filed, escort released, payment confirmed. I even get to put a zero on the personnel-loss form. Administration loves a clean form.</text>
+  </string>
+  <string id="unisg_field_research_return_tip">
+    <text>Field survey complete: five of five samples. Escort the biologist back to the original UNISG base and speak with him to submit the report.</text>
+  </string>
+  <string id="st_taskboard_details_sim_default_isg_trader_task_9">
+    <text>Faction: UNISG\nLocation: Exclusion Zone, anomalous sectors</text>
+  </string>
+  <string id="st_taskboard_details_sim_default_isg_medic_task_3">
+    <text>Faction: UNISG\nLocation: Exclusion Zone, mutant habitats</text>
+  </string>
+</string_table>

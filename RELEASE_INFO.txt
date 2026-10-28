@@ -1,0 +1,15 @@
+WALO: UNISG Command & Operations | v1.0.3
+================================================
+Branding-only final package of HQ v1.0.2 + Field Science v0.9.12.
+Compared with WALO UNISG HQ + Field Science v1.0.3, no gamedata content changed.
+Internal script names, task IDs, squad IDs, save keys and patch names are preserved.
+
+Install with MO2 as one mod. Disable older UNISG component mods first.
+Requires WALO 1.6.11 and GAMMA; Warfare ON, Story Mode OFF.
+See README_EN.txt / README_RU.txt and INTEGRATION/UPSTREAM_EN.md.
+
+The author successfully tested the combined v1.0.3 archive in game as a single mod.
+This does not establish exhaustive regression coverage or compatibility with all GAMMA/WALO versions.
+
+This is an unofficial WALO add-on. Merge supplied patches into current WALO/GAMMA
+source files before using a different version of those upstream mods.

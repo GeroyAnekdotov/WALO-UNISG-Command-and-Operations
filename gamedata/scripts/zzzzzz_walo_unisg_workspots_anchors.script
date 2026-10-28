@@ -1,0 +1,115 @@
+-- UNISG Workspots v0.2.9 seat anchors.
+-- Keeps seated medic and barman on their Workspots seats on jup_b208.
+
+local SEAT_RADIUS = 0.8
+local UPDATE_MS = 1000
+
+local anchors = {
+    { smart = "jup_b208", job = "jup_b208_warfare_medic",
+      pos = { 387.757, 4.279, -125.742 }, seat = { 386.957, 4.279, -125.7285 } },
+    { smart = "jup_b208", job = "jup_b208_warfare_barman",
+      pos = { 424.385, 9.954, -81.692 }, seat = { 425.185, 9.954, -81.6805 } },
+}
+
+local level_anchors
+local seats = {}
+local next_update = 0
+local wrapped_beh_path -- avoid accumulating wrappers on subsequent on_game_start calls
+local seen_at_seat = {} -- NPC ID -> NPC was correctly seated during this session
+local drift_reported = {} -- NPC ID -> avoid logging the same drift every second
+
+local function to_vector(p)
+    return vector():set(p[1], p[2], p[3])
+end
+
+local function enabled()
+    return IsWarfare() and has_alife_info("story_mode_disabled") and not IsStoryMode()
+end
+
+local function actor_on_first_update()
+    level_anchors = nil
+    seats = {}
+    seen_at_seat = {}
+    drift_reported = {}
+    next_update = 0
+    if not enabled() then return end
+    level_anchors = {}
+    for _, a in ipairs(anchors) do
+        local smart = warfare_utils.smart_on_actor_level(a.smart)
+        if smart then
+            local beh = "beh@" .. a.job
+            local seat = a.seat and to_vector(a.seat)
+            level_anchors[#level_anchors + 1] = {
+                smart = smart,
+                logic = "logic@" .. a.job,
+                beh = beh,
+                pos = to_vector(a.pos),
+                seat = seat,
+            }
+            seats[beh] = seat
+        end
+    end
+end
+
+local function near_seat(npc)
+    local st = db.storage[npc:id()]
+    local seat = st and seats[st.active_section]
+    return seat and npc:position():distance_to(seat) < SEAT_RADIUS
+end
+
+local function patch_beh_arrival()
+    if not (axr_beh and axr_beh.action_beh and axr_beh.action_beh.beh_path) then return end
+    local beh_path = axr_beh.action_beh.beh_path
+    -- on_game_start may run again while Lua modules remain loaded. Do not wrap ourselves twice.
+    if beh_path == wrapped_beh_path then return end
+    local function unisg_beh_path(self)
+        if not enabled() then return beh_path(self) end
+        local target = self.st and self.st.desired_target
+        if not (target and target.level_vertex_id and near_seat(self.object)) then
+            return beh_path(self)
+        end
+        local lvid = target.level_vertex_id
+        target.level_vertex_id = self.object:level_vertex_id()
+        local ok, result = pcall(beh_path, self)
+        target.level_vertex_id = lvid -- restore even when another script raised an error
+        if not ok then error(result) end
+        return result
+    end
+    wrapped_beh_path = unisg_beh_path
+    axr_beh.action_beh.beh_path = unisg_beh_path
+end
+
+-- DIAGNOSTICS ONLY. Do not teleport or reset animation state.
+-- The v0.2.8 recovery moved an NPC to the approach cell (a.pos), not its seat.
+-- That could restart the sitting animation and leave the NPC behind the chair.
+local function actor_on_update()
+    if not enabled() then return end
+    if not (level_anchors and #level_anchors > 0) then return end
+    local now = time_global()
+    if now < next_update then return end
+    next_update = now + UPDATE_MS
+
+    for _, a in ipairs(level_anchors) do
+        local id = a.smart.npc_by_job_section and a.smart.npc_by_job_section[a.logic]
+        local npc = id and level.object_by_id(id)
+        local st = npc and db.storage[id]
+        if st and npc:alive() and st.active_section == a.beh and not npc:best_enemy() then
+            local pos = npc:position()
+            local dist = a.seat and pos:distance_to(a.seat)
+            if dist and dist < SEAT_RADIUS then
+                seen_at_seat[id] = true
+                drift_reported[id] = nil
+            elseif dist and seen_at_seat[id] and not drift_reported[id] and not npc:is_talking() then
+                drift_reported[id] = true
+                printf("[UNISG Workspots v0.2.9] drift observed npc=%s job=%s seat_distance=%.3f pos=%.3f,%.3f,%.3f (no teleport)",
+                    tostring(id), a.logic, dist, pos.x, pos.y, pos.z)
+            end
+        end
+    end
+end
+
+function on_game_start()
+    patch_beh_arrival()
+    RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
+    RegisterScriptCallback("actor_on_update", actor_on_update)
+end

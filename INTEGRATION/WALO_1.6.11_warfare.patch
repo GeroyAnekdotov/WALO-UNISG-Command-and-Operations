@@ -1,0 +1,288 @@
+--- a/gamedata/scripts/warfare.script
++++ b/gamedata/scripts/warfare.script
+@@ -336,6 +336,147 @@
+     end
+ end
+ 
++-- UNISG HQ extension for WALO 1.6.11 (v0.8 two-squad-start experiment).
++-- Stock WALO owns the initial spawn and ownership tally; never seed on load.
++-- The addon is opt-in per NEW SAVE and completely inert in Story Mode.
++local UNISG_HQ_SMART = "jup_b208"
++local UNISG_HQ_SECTION = "isg_sim_squad_novice"
++local UNISG_HQ_SAVE_KEY = "walo_unisg_hq_native_v03" -- Keep old save marker unchanged!
++-- This Lua-only registration can outlive a saved-game change inside the process.
++-- Never leave jup_b208 marked as our HQ when loading a Story Mode save.
++local unisg_hq_registered_by_addon = false
++local function unisg_hq_reset_registration()
++    if not unisg_hq_registered_by_addon then return end
++    local sw = smart_terrain_warfare
++    -- Undo only our own addition; do not overwrite unrelated faction registrations.
++    if sw and sw.get_main_base_faction and sw.set_main_base
++       and sw.get_main_base_faction(UNISG_HQ_SMART) == "isg" then
++        sw.set_main_base(UNISG_HQ_SMART, nil)
++    end
++    unisg_hq_registered_by_addon = false
++end
++
++-- GAMMA saves the new-game Story checkbox in axr_main.config BEFORE
++-- fill_start_position(). It sets story_mode_disabled LATER, in
++-- ui_mm_faction_select.on_game_load(). Do not wait for the infoportion
++-- while performing the native new-game fill: it does not exist yet.
++local function unisg_hq_mode()
++    if not IsWarfare() then
++        return false, "warfare-off"
++    end
++    local cfg = axr_main and axr_main.config
++    local faction = cfg and cfg:r_value("character_creation", "new_game_faction", 3)
++    if faction and faction ~= "" then
++        -- A checked Story box is stored as true; unchecked is stored as nil.
++        -- Its presence is the authoritative initial choice before GAMMA
++        -- consumes and clears the transient new-game configuration.
++        if cfg:r_value("character_creation", "new_game_story_mode", 1) == true then
++            return false, "new-game-story-on"
++        end
++        return true, "new-game-story-off"
++    end
++    -- Ordinary saved-game load: the UI has consumed the menu choice, so
++    -- use the saved game infoportion AND WALO's normal Story check.
++    if has_alife_info("story_mode_disabled") and not IsStoryMode() then
++        return true, "saved-story-off"
++    end
++    return false, "story-on-or-choice-unresolved"
++end
++
++local function unisg_hq_enabled()
++    local enabled = unisg_hq_mode()
++    return enabled
++end
++
++local function unisg_hq_store()
++    return alife_storage_manager.get_state()
++end
++
++local function unisg_hq_smart()
++    return SIMBOARD and SIMBOARD.smarts_by_names and SIMBOARD.smarts_by_names[UNISG_HQ_SMART]
++end
++
++local function unisg_hq_capacity(smart)
++    -- bootstrap_smart copies smart.max_population to default_max_population
++    -- and then applies the stalker population multiplier. This raw value
++    -- therefore produces four EFFECTIVE slots after the normal WALO bootstrap.
++    local factor = tonumber(get_stalker_pop_factor()) or 1
++    if factor <= 0 then factor = 1 end
++    local raw_cap = 4 / factor
++    smart.default_max_population = raw_cap
++    smart.max_population = raw_cap
++    if smart.first_update then
++        smart_terrain_warfare.set_max_population(smart)
++    end
++    return raw_cap
++end
++
++-- UNISG HQ services: WALO already provisions trader and mechanic on jup_b208.
++-- Enable the two missing roles using its native uniqueness/respawn loop.
++-- Never spawn NPCs here; check_unique_npcs() counts existing role squads.
++local unisg_services_snapshot = nil
++
++local function unisg_services_enable()
++    local uniques = smart_terrain_warfare and smart_terrain_warfare.uniques
++    local slots = uniques and uniques[UNISG_HQ_SMART]
++    if type(slots) ~= "table" then
++        printf("[WALO UNISG services v0.8] SKIP: native slots unavailable")
++        return
++    end
++    if not unisg_services_snapshot or unisg_services_snapshot.slots ~= slots then
++        unisg_services_snapshot = {
++            slots = slots, medic = slots[3], barman = slots[4]
++        }
++    end
++    slots[3] = math.max(1, tonumber(slots[3]) or 0) -- medic
++    slots[4] = math.max(1, tonumber(slots[4]) or 0) -- barman
++    -- Role enablement is idempotent and intentionally has no per-load log spam.
++end
++
++-- A new Story Mode game can be loaded without restarting the process.
++-- Restore only the two slots this addon changed, leaving other mods intact.
++local function unisg_services_reset()
++    local previous = unisg_services_snapshot
++    if not previous then return end
++    local slots = previous.slots
++    if slots[3] == 1 then slots[3] = previous.medic end
++    if slots[4] == 1 then slots[4] = previous.barman end
++    unisg_services_snapshot = nil
++end
++
++local function unisg_hq_register()
++    local sw = smart_terrain_warfare
++    if not unisg_hq_registered_by_addon then
++        if sw.is_main_base and sw.is_main_base(UNISG_HQ_SMART) then
++            -- Another addon may own the role. Never overwrite an unknown entry:
++            -- WALO has no public API for reading all entry fields to restore it.
++            printf("[WALO UNISG native v0.8] HQ registration SKIP: another main_base entry exists")
++        else
++            sw.set_main_base(UNISG_HQ_SMART, {
++                faction = "isg", protect = false, resurrect = true
++            })
++            unisg_hq_registered_by_addon = true
++        end
++    end
++    unisg_services_enable()
++end
++
++-- Reconstruct transient HQ registration and capacity on loads of v0.3 saves.
++-- No squad is ever created here. Old saves have no opt-in marker.
++local function unisg_hq_restore()
++    if not unisg_hq_enabled() then return end
++    local st = unisg_hq_store()
++    if not (st and st[UNISG_HQ_SAVE_KEY]) then return end
++    local smart = unisg_hq_smart()
++    if not (smart and smart.props and smart.props.base > 0) then
++        printf("[WALO UNISG native v0.8] restore SKIP: smart unavailable")
++        return
++    end
++    unisg_hq_register()
++    unisg_hq_capacity(smart)
++    printf("[WALO UNISG native v0.8] restored HQ and capacity, no spawn")
++end
++
+ function actor_on_first_update()
+     warfare_log.tr_begin("warfare/actor_on_first_update")
+     if not (IsWarfare()) then
+@@ -345,6 +486,8 @@
+         end
+         return
+     end
++
++    unisg_hq_restore()
+ 
+     actor_faction = get_actor_true_community() or alife():actor():community():sub(7)
+     warfare_log.info("actor_on_first_update: actor_faction=%s", actor_faction)
+@@ -931,6 +1074,8 @@
+ -- for vanilla, probably create a custom simulation.ltx
+ function fill_start_position()
+     warfare_log.info("fill_start_position: entry")
++    printf("[WALO UNISG native v0.8] fill callback: warfare=%s already_filled=%s",
++        tostring(IsWarfare()), tostring(SIMBOARD and SIMBOARD.start_position_filled))
+ 
+     if (not IsWarfare()) then
+         warfare_log.info("fill_start_position: IsWarfare=false, skipping")
+@@ -944,6 +1089,7 @@
+ 
+     SIMBOARD.start_position_filled = true
+     warfare_levels.open_graph_gated_smarts()
++    printf("[WALO UNISG native v0.8] native fill_start_position reached")
+ 
+     -- Arm the spawn-timer stagger. It can't be applied here (see stagger_spawn_timers),
+     -- so it runs from the actor_on_update one-shot init -- possibly after GAMMA's
+@@ -953,6 +1099,7 @@
+ 
+     if (warfare_options.options.random_starting_locations) then
+         warfare_log.info("fill_start_position: random_starting_locations enabled, deferring")
++        printf("[WALO UNISG native v0.8] SKIP start: random_starting_locations")
+         return
+         --initialize_random_starting_locations()
+     end
+@@ -1133,6 +1280,90 @@
+         end
+     end)
+ 
++    -- UNISG HQ: two starting squads, processed inside the SAME WALO
++    -- fill_start_position() pass, before the normal owner-commit loop.
++    -- No DLTX change, story squad deletion, parallel spawner, or load-time spawn.
++    local unisg_enabled, unisg_mode_reason = unisg_hq_mode()
++    printf("[WALO UNISG native v0.8] start gate=%s reason=%s", tostring(unisg_enabled), unisg_mode_reason)
++    if unisg_enabled then
++        local st = unisg_hq_store()
++        local smart = unisg_hq_smart()
++        local faction_cfg = warfare_options.options.factions
++        local isg_cfg = faction_cfg and faction_cfg.isg
++        if not st then
++            printf("[WALO UNISG native v0.8] SKIP start: state unavailable")
++        elseif st[UNISG_HQ_SAVE_KEY] then
++            printf("[WALO UNISG native v0.8] SKIP start: save already marked")
++        elseif not (smart and smart.props and smart.props.base > 0) then
++            printf("[WALO UNISG native v0.8] SKIP start: smart unavailable or not a base")
++        elseif not (isg_cfg and isg_cfg.spawn_on_new_game) then
++            printf("[WALO UNISG native v0.8] SKIP start: ISG spawn_on_new_game disabled")
++        elseif not ini_sys:section_exist(UNISG_HQ_SECTION) then
++            printf("[WALO UNISG native v0.8] SKIP start: squad section missing")
++        else
++            -- Never overwrite or attack an already populated starting smart.
++            local registry = SIMBOARD.smarts and SIMBOARD.smarts[smart.id]
++            local occupied = registry == nil
++            if registry then
++                for _ in pairs(registry.squads or {}) do
++                    occupied = true
++                    break
++                end
++            end
++            local owner = smart_terrain_warfare.smart_owners[smart.id]
++            if (owner and owner ~= "none") or
++               (smart.owning_faction and smart.owning_faction ~= "none") then
++                occupied = true
++            end
++            if occupied then
++                printf("[WALO UNISG native v0.8] SKIP start: base already occupied")
++            else
++                local raw_cap = unisg_hq_capacity(smart)
++                -- As for other factions, both squads are seeded before the
++                -- normal owner tally/commit, never on an existing save load.
++                local spawned_count = 0
++                if not owns_section(UNISG_HQ_SECTION, true) then
++                    printf("[WALO UNISG native v0.8] SKIP start: ISG squad section not owned by Warfare")
++                else
++                    for n = 1, 2 do
++                        local ok, squad = pcall(spawn_squad, UNISG_HQ_SECTION, smart)
++                        if not ok or not squad then
++                            printf("[WALO UNISG native v0.8] FAILED seed %s/2: %s", tostring(n), tostring(squad))
++                            break
++                        end
++                        local community = squad:get_squad_community()
++                        if community ~= "isg" then
++                            -- The unexpected squad already exists; do not repeat.
++                            printf("[WALO UNISG native v0.8] WARNING: seed community=%s", tostring(community))
++                            break
++                        end
++                        sim_squad_warfare.set_target(squad, smart.id)
++                        spawn_seq = spawn_seq + 1
++                        if not spawned_by_faction[smart.id] then
++                            spawned_by_faction[smart.id] = {}
++                            spawn_order[smart.id] = {}
++                            spawned_smart[smart.id] = smart
++                        end
++                        local tally = spawned_by_faction[smart.id]
++                        tally.isg = (tally.isg or 0) + 1
++                        spawn_order[smart.id].isg = spawn_order[smart.id].isg or spawn_seq
++                        spawned_count = spawned_count + 1
++                        -- Save this after the first successful squad. A failed
++                        -- second attempt must never trigger a duplicate on load.
++                        if spawned_count == 1 then
++                            st[UNISG_HQ_SAVE_KEY] = true
++                            unisg_hq_register()
++                        end
++                        printf("[WALO UNISG native v0.8] SEEDED %s/2 smart=%s squad=%s raw_cap=%.2f",
++                            tostring(spawned_count), UNISG_HQ_SMART, tostring(squad.id), raw_cap)
++                    end
++                end
++            end
++        end
++    else
++        printf("[WALO UNISG native v0.8] SKIP start: %s", unisg_mode_reason)
++    end
++
+     -- Commit ownership: plurality of squads spawned, ties broken by whoever arrived first.
+     -- Both smart.owning_faction and smart_owners are written. smart_owners is the load-bearing
+     -- half: bootstrap_smart falls back to "none" when the smart has no entry there, so without it
+@@ -1448,7 +1679,12 @@
+ end
+ 
+ function on_game_start()
++    -- Reverse ephemeral modifications before WALO initializes another saved game.
++    -- In particular Story Mode must inherit the original 1.6.11 HQ registry.
++    unisg_hq_reset_registration()
++    unisg_services_reset()
+     warfare_log.banner("Warfare ALife Overhaul %s", VERSION)
++    printf("[WALO UNISG native v0.8] warfare.script loaded (WALO 1.6.11)")
+     warfare_log.info("on_game_start: registering warfare callbacks")
+     --_G.WARFARE = false
+     warfare_options.update_settings()

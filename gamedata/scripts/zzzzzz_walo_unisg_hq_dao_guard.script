@@ -1,0 +1,102 @@
+-- UNISG HQ DAO Guard v0.1 - WALO 1.6.11 / GAMMA DAO
+-- Runtime-only filter for jup_b208: NO replacement of drx_da_main.script
+-- Never runs in Story Mode or when Warfare is disabled.
+-- Preserves existing dynamic anomaly objects and DAO save bookkeeping.
+
+local SMART = "jup_b208"
+local LEVEL = "jupiter"
+local INTERVAL = 3000
+
+local original_spawn = nil
+local wrapped_spawn = nil
+local next_check = 0
+local blocked = 0
+local warned_replaced = false
+local warned_existing = false
+
+local function log(fmt, ...)
+    if printf then
+        printf("[UNISG DAO Guard v0.1] " .. string.format(fmt, ...))
+    end
+end
+
+local function enabled()
+    return IsWarfare and IsWarfare()
+        and IsStoryMode and not IsStoryMode()
+        and has_alife_info and has_alife_info("story_mode_disabled") == true
+end
+
+local function install()
+    local dao = drx_da_main
+    if not dao or type(dao.drx_da_spawn_anomaly_on_smart) ~= "function" then
+        return false
+    end
+    local current = dao.drx_da_spawn_anomaly_on_smart
+    if wrapped_spawn then
+        if current ~= wrapped_spawn and not warned_replaced then
+            -- A later add-on may wrap our function and delegate to it, or replace it.
+            -- Do not wrap again: layering wrappers repeatedly can cause recursion.
+            log("WARNING: DAO spawn function changed after guard installation; check script compatibility")
+            warned_replaced = true
+        end
+        return true
+    end
+
+    original_spawn = current
+    wrapped_spawn = function(level_file, smart_name, anomaly_type, level_name, position_data)
+        if level_name == LEVEL and smart_name == SMART and enabled() then
+            blocked = blocked + 1
+            if blocked == 1 then
+                log("BLOCKED generation for smart=%s on %s (Warfare only)", SMART, LEVEL)
+            end
+            return false
+        end
+        return original_spawn(level_file, smart_name, anomaly_type, level_name, position_data)
+    end
+    dao.drx_da_spawn_anomaly_on_smart = wrapped_spawn
+    log("installed non-invasive DAO generation filter for %s", SMART)
+    return true
+end
+
+local function warn_preexisting()
+    if warned_existing or not enabled() then return end
+    if not (level and level.name and level.name() == LEVEL) then return end
+    local dao = drx_da_main
+    local levels = dao and dao.updated_anomaly_levels
+    local data = levels and levels[LEVEL]
+    local by_smart = data and data.anomalies_by_smart
+    local ids = by_smart and by_smart[SMART]
+    if type(ids) ~= "table" then return end
+    local n = 0
+    for _, exists in pairs(ids) do
+        if exists then n = n + 1 end
+    end
+    if n > 0 then
+        log("NOTICE: %s DAO anomalies already saved for %s; not deleting saved objects. New spawning is blocked.", tostring(n), SMART)
+        warned_existing = true
+    end
+end
+
+local function actor_on_first_update()
+    next_check = 0
+    warned_existing = false
+    install()
+end
+
+local function actor_on_update()
+    local now = time_global()
+    if now < next_check then return end
+    next_check = now + INTERVAL
+    install()
+    warn_preexisting()
+end
+
+function on_game_start()
+    blocked = 0
+    next_check = 0
+    warned_replaced = false
+    warned_existing = false
+    install()
+    RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
+    RegisterScriptCallback("actor_on_update", actor_on_update)
+end

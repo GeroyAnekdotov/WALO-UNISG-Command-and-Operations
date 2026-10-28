@@ -1,0 +1,81 @@
+-- WALO UNISG HQ Friendly Base Saving v0.1
+-- Scoped patch for GAMMA's ish_campfire_saving: no replacement of its script.
+-- Only allows an ISG player physically inside the ISG-owned Jupiter HQ.
+local VOLUMES = {
+    { x = 383.105, y = 4.494, z = -126.328, r = 18.0 }, -- infirmary
+    { x = 400.152, y = 4.279, z = -130.446, r = 28.0 }, -- main depot (player reading)
+    { x = 416.000, y = 7.000, z = -104.000, r = 20.0 }, -- interior corridor
+    { x = 424.685, y = 9.954, z = -81.688,  r = 18.0 }, -- bar
+}
+
+local function within_hq(p)
+    if not p then return false end
+    for _, site in ipairs(VOLUMES) do
+        local dx, dy, dz = p.x - site.x, p.y - site.y, p.z - site.z
+        if dx*dx + dy*dy + dz*dz <= site.r*site.r then
+            return true
+        end
+    end
+    return false
+end
+
+local function is_hq_active()
+    if not (IsWarfare and IsWarfare() and IsStoryMode and not IsStoryMode()
+        and has_alife_info and has_alife_info('story_mode_disabled')) then return false end
+    if not (level and level.name and level.name() == 'jupiter') then return false end
+    if not (SIMBOARD and SIMBOARD.smarts_by_names) then return false end
+    local smart = SIMBOARD.smarts_by_names['jup_b208']
+    if type(smart) == 'number' then smart = alife_object(smart) end
+    return smart and smart.owning_faction == 'isg' or false
+end
+
+local INTERVAL = 5000
+local last_check = 0
+local wrapped = nil
+local original = nil
+local warned = false
+local function log(s) if printf then printf('[UNISG HQ Base Saving v0.1] ' .. s) end end
+
+local function allow_at_hq()
+    if not (db and db.actor and is_hq_active()) then return false end
+    if not (gameplay_disguise and gameplay_disguise.get_default_comm
+        and gameplay_disguise.get_default_comm() == 'isg') then return false end
+    return within_hq(db.actor:position())
+end
+
+local function install()
+    local mod = ish_campfire_saving
+    if not mod or type(mod.is_within_friendly_base) ~= 'function' then return end
+    if wrapped then
+        if mod.is_within_friendly_base ~= wrapped and not warned then
+            warned = true
+            log('WARNING: another mod replaced friendly-base checker after our patch')
+        end
+        return
+    end
+    original = mod.is_within_friendly_base
+    wrapped = function(...)
+        if allow_at_hq() then return true end
+        return original(...)
+    end
+    mod.is_within_friendly_base = wrapped
+    log('installed base-only saving exception for UNISG jup_b208')
+end
+
+local function actor_on_first_update()
+    last_check = 0
+    install()
+end
+
+local function actor_on_update()
+    local now = time_global()
+    if now < last_check then return end
+    last_check = now + INTERVAL
+    install()
+end
+
+function on_game_start()
+    install()
+    RegisterScriptCallback('actor_on_first_update', actor_on_first_update)
+    RegisterScriptCallback('actor_on_update', actor_on_update)
+end

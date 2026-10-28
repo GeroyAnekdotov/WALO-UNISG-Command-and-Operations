@@ -1,0 +1,138 @@
+-- WALO UNISG Medic Safe Arrival v0.1 (optional for Workspots v0.2.9)
+-- Target: one generated ISG medic assigned to jup_b208, never story NPCs.
+-- The smart terrain's default spawn is outside the tunnel. When that NPC
+-- switches online too far from its infirmary job, move it ONCE to the verified
+-- job's approach point. No periodic repositioning and no animation patches.
+
+local SMART = "jup_b208"
+local MEDIC_SECTION = "sim_default_isg_medic"
+local DEST = { 387.757, 4.279, -125.742 } -- Workspots beh job approach, verified in game
+local DEST_GVID = 4677 -- measured in the infirmary on Jupiter by the player
+local MAX_XZ = 8.0
+local MAX_Y = 3.0
+
+local handled = {} -- online NPC id -> already checked for this online session
+local last_warning = {}
+
+local function log(fmt, ...)
+    if printf then
+        printf("[UNISG Medic Safe Arrival v0.1] " .. string.format(fmt, ...))
+    end
+end
+
+local function enabled()
+    return IsWarfare and IsWarfare() and IsStoryMode and not IsStoryMode()
+        and has_alife_info and has_alife_info("story_mode_disabled")
+end
+
+local function is_medic(npc)
+    if not npc then return false end
+    local section = nil
+    if npc.section then
+        local ok, v = pcall(function() return npc:section() end)
+        if ok then section = v end
+    end
+    if section == MEDIC_SECTION then return true end
+    if npc.name then
+        local ok, v = pcall(function() return npc:name() end)
+        return ok and type(v) == "string" and v:match("^sim_default_isg_medic[%d_]*$") ~= nil
+    end
+    return false
+end
+
+local function get_hq()
+    if not (SIMBOARD and SIMBOARD.smarts_by_names) then return nil end
+    local smart = SIMBOARD.smarts_by_names[SMART]
+    if type(smart) == "number" then smart = alife_object(smart) end
+    if not smart and SIMBOARD.get_smart_by_name then
+        smart = SIMBOARD:get_smart_by_name(SMART)
+    end
+    return smart
+end
+
+local function is_hq_medic(se_obj, smart)
+    if not (se_obj and smart and SIMBOARD and SIMBOARD.smarts) then return false end
+    -- Do not move a medic on a captured or neutral smart.
+    if smart.owning_faction ~= "isg" then return false end
+    local group_id = se_obj.group_id
+    if not group_id or group_id == 65535 then return false end
+    local entry = SIMBOARD.smarts[smart.id]
+    return entry and entry.squads and entry.squads[group_id] == true or false
+end
+
+local function check_online_medic(npc)
+    if not enabled() or not is_medic(npc) then return end
+    local id = npc:id()
+    if handled[id] then return end
+    if not npc:alive() then handled[id] = true; return end
+
+    local smart = get_hq()
+    if not smart or not is_hq_medic(alife_object(id), smart) then return end
+
+    local p = npc:position()
+    local dx, dy, dz = p.x - DEST[1], p.y - DEST[2], p.z - DEST[3]
+    local planar = math.sqrt(dx * dx + dz * dz)
+    if planar <= MAX_XZ and math.abs(dy) <= MAX_Y then
+        -- Already on the safe interior level. Do not disturb sitting/AI.
+        handled[id] = true
+        return
+    end
+
+    local target = vector():set(DEST[1], DEST[2], DEST[3])
+    local lvid = level.vertex_id(target)
+    if not lvid or lvid == 0 or lvid == 4294967295 then
+        if not last_warning[id] then
+            log("SKIP invalid target level vertex for npc=%s: %s", tostring(id), tostring(lvid))
+            last_warning[id] = true
+        end
+        return
+    end
+
+    -- One controlled correction immediately after going online. Keep the
+    -- server-side coordinates consistent, so saving/loading does not snap
+    -- the NPC back to the smart's external origin.
+    local ok, err = pcall(function()
+        npc:set_npc_position(target)
+        local se_obj = alife_object(id)
+        if se_obj then
+            se_obj.position = target
+            se_obj.m_level_vertex_id = lvid
+            se_obj.m_game_vertex_id = DEST_GVID
+        end
+        if db.offline_objects and db.offline_objects[id] then
+            db.offline_objects[id].level_vertex_id = lvid
+        end
+        if db.spawned_vertex_by_id then db.spawned_vertex_by_id[id] = nil end
+    end)
+    if ok then
+        handled[id] = true
+        log("MOVED medic=%s from %.3f,%.3f,%.3f to infirmary %.3f,%.3f,%.3f lvid=%s gvid=%s",
+            tostring(id), p.x, p.y, p.z, DEST[1], DEST[2], DEST[3], tostring(lvid), tostring(DEST_GVID))
+    elseif not last_warning[id] then
+        log("ERROR moving medic=%s: %s", tostring(id), tostring(err))
+        last_warning[id] = true
+    end
+end
+
+local function npc_on_update(npc)
+    -- Almost all NPC callbacks exit at this cheap section check.
+    if not is_medic(npc) then return end
+    check_online_medic(npc)
+end
+
+local function npc_on_net_destroy(npc)
+    if not npc then return end
+    handled[npc:id()] = nil
+    last_warning[npc:id()] = nil
+end
+
+local function actor_on_first_update()
+    handled = {}
+    last_warning = {}
+end
+
+function on_game_start()
+    RegisterScriptCallback("npc_on_update", npc_on_update)
+    RegisterScriptCallback("npc_on_net_destroy", npc_on_net_destroy)
+    RegisterScriptCallback("actor_on_first_update", actor_on_first_update)
+end

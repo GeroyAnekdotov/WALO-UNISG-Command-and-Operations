@@ -1,0 +1,268 @@
+<?xml version='1.0' encoding='windows-1251'?>
+<string_table>
+    <string id="unisg_hq_trader_task_1_title">
+        <text>Зачистка мутантов</text>
+    </string>
+    <string id="unisg_hq_trader_task_1_descr">
+        <text>На территории Зоны выявлено опасное скопление мутантов. Операцию поручил %s (%s). Ликвидируйте указанную группу и вернитесь за оплатой.</text>
+    </string>
+    <string id="unisg_hq_trader_task_1_job">
+        <text>Есть задача по ликвидации мутантов. Зачистите указанную территорию.</text>
+    </string>
+    <string id="unisg_hq_trader_task_1_finish">
+        <text>Цель уничтожена. Хорошая работа.</text>
+    </string>
+    <string id="unisg_hq_trader_task_2_title">
+        <text>Штурм вражеского лагеря</text>
+    </string>
+    <string id="unisg_hq_trader_task_2_descr">
+        <text>Разведка выявила вражеский лагерь. Заказчик: %s, сектор %s. Очистите отмеченную позицию от противников и доложите о выполнении.</text>
+    </string>
+    <string id="unisg_hq_trader_task_2_job">
+        <text>Нужно устранить вражеский отряд на указанной позиции.</text>
+    </string>
+    <string id="unisg_hq_trader_task_2_finish">
+        <text>Лагерь зачищен. Контракт закрыт.</text>
+    </string>
+    <string id="unisg_hq_trader_task_3_title">
+        <text>Контракт на ликвидацию</text>
+    </string>
+    <string id="unisg_hq_trader_task_3_descr">
+        <text>Подписан контракт на устранение цели. Заказчик: %s, сектор %s. Подробности о цели появятся после принятия задания.</text>
+    </string>
+    <string id="unisg_hq_trader_task_3_job">
+        <text>Есть контракт на устранение конкретного вражеского сталкера.</text>
+    </string>
+    <string id="unisg_hq_trader_task_3_finish">
+        <text>Цель ликвидирована. Вознаграждение ваше.</text>
+    </string>
+    <string id="unisg_hq_trader_task_4_title">
+        <text>Артефакт для исследований: %s</text>
+    </string>
+    <string id="unisg_hq_trader_task_4_descr">
+        <text>Заказчик %s (%s) требует образец для научного анализа: %s. Добудьте его и доставьте в штаб.</text>
+    </string>
+    <string id="unisg_hq_trader_task_4_job">
+        <text>Научная группа запрашивает артефакт.</text>
+    </string>
+    <string id="unisg_hq_trader_task_4_finish">
+        <text>Образец получен. Учёные будут довольны.</text>
+    </string>
+    <string id="unisg_hq_trader_task_5_title">
+        <text>Редкие образцы: %s</text>
+    </string>
+    <string id="unisg_hq_trader_task_5_descr">
+        <text>Для лаборатории требуется биологический материал редких мутантов. Заказчик: %s (%s). Необходимо принести: %s.</text>
+    </string>
+    <string id="unisg_hq_trader_task_5_job">
+        <text>Нужно доставить редкие части мутантов для исследований.</text>
+    </string>
+    <string id="unisg_hq_trader_task_5_finish">
+        <text>Редкие образцы получены и оплачены.</text>
+    </string>
+    <string id="unisg_hq_trader_task_6_title">
+        <text>Биоматериалы: %s</text>
+    </string>
+    <string id="unisg_hq_trader_task_6_descr">
+        <text>Задание на сбор обычных биологических материалов. Заказчик: %s (%s). Доставьте: %s.</text>
+    </string>
+    <string id="unisg_hq_trader_task_6_job">
+        <text>Необходимо собрать биологические образцы мутантов.</text>
+    </string>
+    <string id="unisg_hq_trader_task_6_finish">
+        <text>Материалы приняты. Работа оплачена.</text>
+    </string>
+    <string id="unisg_hq_barman_task_1_descr">
+        <text>Заказчик %s (%s) запрашивает: %s.</text>
+    </string>
+    <string id="unisg_hq_barman_task_1_finish">
+        <text>Спасибо, припасы пригодятся.</text>
+    </string>
+    <string id="unisg_hq_barman_task_1_job">
+        <text>Нужно доставить продукты.</text>
+    </string>
+    <string id="unisg_hq_barman_task_1_title">
+        <text>Полевой паёк: %s</text>
+    </string>
+    <string id="unisg_hq_dynamic_9101_about">
+        <text>Есть обычный боевой контракт. Возьмёшься за ликвидацию цели?</text>
+    </string>
+    <string id="unisg_hq_dynamic_9101_finish">
+        <text>Материалы получены. Контракт закрыт.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9101_name">
+        <text>Ликвидация цели</text>
+    </string>
+    <string id="unisg_hq_dynamic_9101_text">
+        <text>Контракт UNISG на ликвидацию враждебного сталкера.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9102_about">
+        <text>Нужно добыть материалы для нужд штаба UNISG. Поможешь?</text>
+    </string>
+    <string id="unisg_hq_dynamic_9102_fetch_about">
+        <text>Принеси запрошенные образцы: %s. После доставки получишь награду.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9102_fetch_finish">
+        <text>Материалы получены. Контракт закрыт.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9102_name">
+        <text>Образцы мяса мутантов: %s</text>
+    </string>
+    <string id="unisg_hq_dynamic_9102_text">
+        <text>Для снабжения штаба нужны образцы мяса мутантов: %s.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9103_about">
+        <text>Нужно добыть материалы для нужд штаба UNISG. Поможешь?</text>
+    </string>
+    <string id="unisg_hq_dynamic_9103_fetch_about">
+        <text>Принеси запрошенные образцы: %s. После доставки получишь награду.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9103_fetch_finish">
+        <text>Материалы получены. Контракт закрыт.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9103_name">
+        <text>Тканевые образцы: %s</text>
+    </string>
+    <string id="unisg_hq_dynamic_9103_text">
+        <text>Для исследований UNISG нужны ткани мутантов: %s.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9104_about">
+        <text>Нужно добыть материалы для нужд штаба UNISG. Поможешь?</text>
+    </string>
+    <string id="unisg_hq_dynamic_9104_fetch_about">
+        <text>Принеси запрошенные образцы: %s. После доставки получишь награду.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9104_fetch_finish">
+        <text>Материалы получены. Контракт закрыт.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9104_name">
+        <text>Редкий биоматериал: %s</text>
+    </string>
+    <string id="unisg_hq_dynamic_9104_text">
+        <text>Научная группа UNISG запросила редкий биоматериал: %s.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9105_about">
+        <text>Нужно добыть материалы для нужд штаба UNISG. Поможешь?</text>
+    </string>
+    <string id="unisg_hq_dynamic_9105_fetch_about">
+        <text>Принеси запрошенные образцы: %s. После доставки получишь награду.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9105_fetch_finish">
+        <text>Материалы получены. Контракт закрыт.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9105_name">
+        <text>Трофеи редких мутантов: %s</text>
+    </string>
+    <string id="unisg_hq_dynamic_9105_text">
+        <text>Для исследований нужны редкие шкуры мутантов: %s.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9106_about">
+        <text>Нужно добыть материалы для нужд штаба UNISG. Поможешь?</text>
+    </string>
+    <string id="unisg_hq_dynamic_9106_fetch_about">
+        <text>Принеси запрошенные образцы: %s. После доставки получишь награду.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9106_fetch_finish">
+        <text>Материалы получены. Контракт закрыт.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9106_name">
+        <text>Медицинское снабжение: %s</text>
+    </string>
+    <string id="unisg_hq_dynamic_9106_text">
+        <text>Штаб UNISG нуждается в медицинских принадлежностях: %s.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9107_about">
+        <text>Нужно добыть материалы для нужд штаба UNISG. Поможешь?</text>
+    </string>
+    <string id="unisg_hq_dynamic_9107_fetch_about">
+        <text>Принеси запрошенные образцы: %s. После доставки получишь награду.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9107_fetch_finish">
+        <text>Материалы получены. Контракт закрыт.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9107_name">
+        <text>Полевое снабжение: %s</text>
+    </string>
+    <string id="unisg_hq_dynamic_9107_text">
+        <text>Для разведгруппы UNISG нужно продовольствие: %s.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9108_about">
+        <text>Нужно добыть материалы для нужд штаба UNISG. Поможешь?</text>
+    </string>
+    <string id="unisg_hq_dynamic_9108_fetch_about">
+        <text>Принеси запрошенные образцы: %s. После доставки получишь награду.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9108_fetch_finish">
+        <text>Материалы получены. Контракт закрыт.</text>
+    </string>
+    <string id="unisg_hq_dynamic_9108_name">
+        <text>Ремонтные материалы: %s</text>
+    </string>
+    <string id="unisg_hq_dynamic_9108_text">
+        <text>Подразделению UNISG нужны технические материалы: %s.</text>
+    </string>
+    <string id="unisg_hq_medic_task_2_descr">
+        <text>Заказчик %s (%s) запрашивает: %s.</text>
+    </string>
+    <string id="unisg_hq_medic_task_2_finish">
+        <text>Спасибо, припасы пригодятся.</text>
+    </string>
+    <string id="unisg_hq_medic_task_2_job">
+        <text>Нужно пополнить склад медикаментов.</text>
+    </string>
+    <string id="unisg_hq_medic_task_2_title">
+        <text>Лазарет: запасы медикаментов: %s</text>
+    </string>
+    <string id="unisg_hq_trader_task_7_descr">
+        <text>Заказчик %s (%s) запрашивает медикаменты: %s.</text>
+    </string>
+    <string id="unisg_hq_trader_task_7_finish">
+        <text>Лазарет пополнен, получи оплату.</text>
+    </string>
+    <string id="unisg_hq_trader_task_7_job">
+        <text>Нужны медикаменты для лазарета.</text>
+    </string>
+    <string id="unisg_hq_trader_task_7_title">
+        <text>Запас медикаментов: %s</text>
+    </string>
+    <string id="unisg_hq_medic_task_1_name">
+        <text>Набор для изготовления лекарств: %s</text>
+    </string>
+    <string id="unisg_hq_medic_task_1_text">
+        <text>Медику UNISG в штабе на Юпитере нужен %s для изготовления лекарств и расширения ассортимента.</text>
+    </string>
+    <string id="unisg_hq_medic_task_1_about">
+        <text>Прежде чем я смогу нормально снабжать лазарет, мне нужен набор для изготовления лекарств. Принеси один, и я расширю ассортимент.</text>
+    </string>
+    <string id="unisg_hq_medic_task_1_fetch_about">
+        <text>Принеси мне один %s. Тогда я смогу лучше снабжать лазарет.</text>
+    </string>
+    <string id="unisg_hq_medic_task_1_fetch_finish">
+        <text>Спасибо за набор. Теперь в лазарете будет больше медикаментов.</text>
+    </string>
+
+    <string id="unisg_hq_trader_task_8_title">
+        <text>Потерянное знание</text>
+    </string>
+    <string id="unisg_hq_trader_task_8_descr">
+        <text>Разведке UNISG стало известно о тайнике с засекреченными исследовательскими документами. Найдите тайник, заберите документы и верните их торговцу штаба.</text>
+    </string>
+    <string id="unisg_hq_trader_task_8_job">
+        <text>Нам нужны секретные научные материалы из одного тайника. Проверьте координаты, заберите документы и доставьте их сюда. Остальные вещи в тайнике можете оставить себе.</text>
+    </string>
+    <string id="unisg_hq_trader_task_8_finish">
+        <text>Документы доставлены. Отличная работа, оплата ваша.</text>
+    </string>
+    <string id="unisg_hq_barman_task_2_title">
+        <text>Разведданные из тайника</text>
+    </string>
+    <string id="unisg_hq_barman_task_2_descr">
+        <text>Связной UNISG оставил в тайнике КПК с разведывательной информацией. Найдите устройство и доставьте его бармену штаба.</text>
+    </string>
+    <string id="unisg_hq_barman_task_2_job">
+        <text>Наш связной спрятал КПК с разведданными и пропал. Координаты тайника у нас есть. Принесите КПК, а остальное содержимое тайника забирайте.</text>
+    </string>
+    <string id="unisg_hq_barman_task_2_finish">
+        <text>Разведданные у нас. Получите вознаграждение.</text>
+    </string>
+</string_table>

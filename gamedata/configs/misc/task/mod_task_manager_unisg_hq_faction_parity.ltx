@@ -1,0 +1,514 @@
+; WALO UNISG HQ Tasks v0.2 - faction-parity add-on for GAMMA/WALO 1.6.11
+; Original tm_dynamic.ltx and tm_warfare.ltx are intentionally UNMODIFIED.
+; All new jobs: Warfare ON, Story Mode OFF, actor ISG.
+; Standard NPC dynamic-task roll/cooldown is NOT patched.
+; IMPORTANT: disable v0.1 repeatable-contracts mod to avoid duplicate sections.
+
+; ISG dynamic clone of simulation_task_33; same original repeat_timeout / handlers, Warfare-only.
+[simulation_task_9101]
+
+icon = ui_inGame2_Odin_vistrel
+storyline = false
+prior = 45
+sim_communities = isg
+precondition = {+story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+repeat_timeout = 21600
+;precondition = true
+
+title = unisg_hq_dynamic_9101_name
+descr = unisg_hq_dynamic_9101_text
+job_descr = unisg_hq_dynamic_9101_about
+task_complete_descr = unisg_hq_dynamic_9101_finish
+
+stage_complete = 1
+target_functor = general_bounty_task
+status_functor = bounty_task
+condlist_0 = {!task_giver_alive(simulation_task_9101)} fail
+
+on_job_descr = %=setup_bounty_task(simulation_task_9101:false:true:stalker:dolg)%
+on_complete = %=reward_random_money(5500:6000) =reward_random_item(tushonka:protein:beans:chili:nuts:mre:ration_ru:ration_ukr) =reward_random_item(grenade_rgd5:grenade_f1:ammo_m209:mine_new:ied_rpg_new:ied_new) =complete_task_inc_goodwill(50:isg) =dec_goodwill_by_target_comm(50:simulation_task_9101) =inc_task_stage(simulation_task_9101) =drx_sl_unregister_task_giver(simulation_task_9101) =drx_sl_reset_stored_task(simulation_task_9101)%
+on_fail = %=fail_task_dec_goodwill(50:isg) =drx_sl_unregister_task_giver(simulation_task_9101) =drx_sl_reset_stored_task(simulation_task_9101)%
+
+;------------------------------------------------
+
+; ISG dynamic clone of simulation_task_74; same original repeat_timeout / handlers, Warfare-only.
+[simulation_task_9102]
+
+icon = ui_inGame2_Pripasi
+storyline = false
+prior = 30
+sim_communities = isg
+precondition = {+story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+repeat_timeout = 32400
+;precondition = true
+
+title = unisg_hq_dynamic_9102_name
+title_functor = general_fetch_task
+descr = unisg_hq_dynamic_9102_text
+descr_functor = general_fetch_task
+job_descr = unisg_hq_dynamic_9102_about
+fetch_descr = unisg_hq_dynamic_9102_fetch_about
+task_complete_descr = unisg_hq_dynamic_9102_fetch_finish
+
+stage_complete = 1
+target_functor = general_fetch_task
+status_functor = actor_has_fetch_item
+condlist_0 = {!task_giver_alive(simulation_task_9102)} fail
+
+fetch_func = %=setup_fetch_task(simulation_task_9102_fetch:mutant_meat_common_x:1:3)%
+on_complete = %=fetch_reward_and_remove(simulation_task_9102_fetch:1.1) =reward_stash(true) =complete_task_inc_goodwill(10:isg) =inc_task_stage(simulation_task_9102) =pstor_reset(simulation_task_9102_fetch) =drx_sl_unregister_task_giver(simulation_task_9102) =drx_sl_reset_stored_task(simulation_task_9102)%
+on_fail = %=fail_task_dec_goodwill(20:isg) =pstor_reset(simulation_task_9102_fetch) =drx_sl_unregister_task_giver(simulation_task_9102) =drx_sl_reset_stored_task(simulation_task_9102)%
+
+;------------------------------------------------
+
+; ISG dynamic clone of simulation_task_89; same original repeat_timeout / handlers, Warfare-only.
+[simulation_task_9103]
+
+icon = ui_inGame2_Logovo_krovososov
+storyline = false
+prior = 35
+sim_communities = isg
+precondition = {+story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+repeat_timeout = 32400
+;precondition = true
+
+title = unisg_hq_dynamic_9103_name
+title_functor = general_fetch_task
+descr = unisg_hq_dynamic_9103_text
+descr_functor = general_fetch_task
+job_descr = unisg_hq_dynamic_9103_about
+fetch_descr = unisg_hq_dynamic_9103_fetch_about
+task_complete_descr = unisg_hq_dynamic_9103_fetch_finish
+
+stage_complete = 1
+target_functor = general_fetch_task
+status_functor = actor_has_fetch_item
+condlist_0 = {!task_giver_alive(simulation_task_9103)} fail
+
+fetch_func = %=setup_fetch_task(simulation_task_9103_fetch:mutant_part_medium_x:1:3)%
+on_complete = %=fetch_reward_and_remove(simulation_task_9103_fetch:2) =reward_stash(true) =complete_task_inc_goodwill(50:isg) =inc_task_stage(simulation_task_9103) =pstor_reset(simulation_task_9103_fetch) =drx_sl_unregister_task_giver(simulation_task_9103) =drx_sl_reset_stored_task(simulation_task_9103)%
+on_fail = %=fail_task_dec_goodwill(50:isg) =pstor_reset(simulation_task_9103_fetch) =drx_sl_unregister_task_giver(simulation_task_9103) =drx_sl_reset_stored_task(simulation_task_9103)%
+
+;------------------------------------------------
+
+; ISG dynamic clone of simulation_task_92; same original repeat_timeout / handlers, Warfare-only.
+[simulation_task_9104]
+
+icon = ui_inGame2_Logovo_krovososov
+storyline = false
+prior = 35
+sim_communities = isg
+precondition = {+story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+repeat_timeout = 32400
+;precondition = true
+
+title = unisg_hq_dynamic_9104_name
+title_functor = general_fetch_task
+descr = unisg_hq_dynamic_9104_text
+descr_functor = general_fetch_task
+job_descr = unisg_hq_dynamic_9104_about
+fetch_descr = unisg_hq_dynamic_9104_fetch_about
+task_complete_descr = unisg_hq_dynamic_9104_fetch_finish
+
+stage_complete = 1
+target_functor = general_fetch_task
+status_functor = actor_has_fetch_item
+condlist_0 = {!task_giver_alive(simulation_task_9104)} fail
+
+fetch_func = %=setup_fetch_task(simulation_task_9104_fetch:mutant_part_rare_x:1:1)%
+on_complete = %=fetch_reward_and_remove(simulation_task_9104_fetch:2.4) =reward_stash(true) =complete_task_inc_goodwill(80:isg) =inc_task_stage(simulation_task_9104) =pstor_reset(simulation_task_9104_fetch) =drx_sl_unregister_task_giver(simulation_task_9104) =drx_sl_reset_stored_task(simulation_task_9104)%
+on_fail = %=fail_task_dec_goodwill(90:isg) =pstor_reset(simulation_task_9104_fetch) =drx_sl_unregister_task_giver(simulation_task_9104) =drx_sl_reset_stored_task(simulation_task_9104)%
+
+;------------------------------------------------
+
+; ISG dynamic clone of simulation_task_99; same original repeat_timeout / handlers, Warfare-only.
+[simulation_task_9105]
+
+icon = ui_inGame2_Logovo_krovososov
+storyline = false
+prior = 35
+sim_communities = isg
+precondition = {+story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+repeat_timeout = 500000
+;precondition = true
+
+title = unisg_hq_dynamic_9105_name
+title_functor = general_fetch_task
+descr = unisg_hq_dynamic_9105_text
+descr_functor = general_fetch_task
+job_descr = unisg_hq_dynamic_9105_about
+fetch_descr = unisg_hq_dynamic_9105_fetch_about
+task_complete_descr = unisg_hq_dynamic_9105_fetch_finish
+
+stage_complete = 1
+target_functor = general_fetch_task
+status_functor = actor_has_fetch_item
+condlist_0 = {!task_giver_alive(simulation_task_9105)} fail
+
+fetch_func = %=setup_fetch_task(simulation_task_9105_fetch:mutant_hide_rare_x:1:1)%
+on_complete = %=fetch_reward_and_remove(simulation_task_9105_fetch:2.3) =reward_stash(true) =complete_task_inc_goodwill(35:isg) =inc_task_stage(simulation_task_9105) =pstor_reset(simulation_task_9105_fetch) =drx_sl_unregister_task_giver(simulation_task_9105) =drx_sl_reset_stored_task(simulation_task_9105)%
+on_fail = %=fail_task_dec_goodwill(70:isg) =pstor_reset(simulation_task_9105_fetch) =drx_sl_unregister_task_giver(simulation_task_9105) =drx_sl_reset_stored_task(simulation_task_9105)%
+
+;------------------------------------------------
+
+; ISG dynamic clone of simulation_task_102; same original repeat_timeout / handlers, Warfare-only.
+[simulation_task_9106]
+
+icon = ui_inGame2_Pripasi
+storyline = false
+prior = 35
+sim_communities = isg
+precondition = {+story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+repeat_timeout = 32400
+;precondition = true
+
+title = unisg_hq_dynamic_9106_name
+title_functor = general_fetch_task
+descr = unisg_hq_dynamic_9106_text
+descr_functor = general_fetch_task
+job_descr = unisg_hq_dynamic_9106_about
+fetch_descr = unisg_hq_dynamic_9106_fetch_about
+task_complete_descr = unisg_hq_dynamic_9106_fetch_finish
+
+stage_complete = 1
+target_functor = general_fetch_task
+status_functor = actor_has_fetch_item
+condlist_0 = {!task_giver_alive(simulation_task_9106)} fail
+
+fetch_func = %=setup_fetch_task(simulation_task_9106_fetch:medical_x:2:5)%
+on_complete = %=fetch_reward_and_remove(simulation_task_9106_fetch:0.7) =reward_stash(true) =complete_task_inc_goodwill(15:isg) =inc_task_stage(simulation_task_9106) =pstor_reset(simulation_task_9106_fetch) =drx_sl_unregister_task_giver(simulation_task_9106) =drx_sl_reset_stored_task(simulation_task_9106)%
+on_fail = %=fail_task_dec_goodwill(30:isg) =pstor_reset(simulation_task_9106_fetch) =drx_sl_unregister_task_giver(simulation_task_9106) =drx_sl_reset_stored_task(simulation_task_9106)%
+
+;------------------------------------------------
+
+; ISG dynamic clone of simulation_task_112; same original repeat_timeout / handlers, Warfare-only.
+[simulation_task_9107]
+
+icon = ui_inGame2_Pripasi
+storyline = false
+prior = 35
+sim_communities = isg
+precondition = {+story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+repeat_timeout = 32400
+;precondition = true
+
+title = unisg_hq_dynamic_9107_name
+title_functor = general_fetch_task
+descr = unisg_hq_dynamic_9107_text
+descr_functor = general_fetch_task
+job_descr = unisg_hq_dynamic_9107_about
+fetch_descr = unisg_hq_dynamic_9107_fetch_about
+task_complete_descr = unisg_hq_dynamic_9107_fetch_finish
+
+stage_complete = 1
+target_functor = general_fetch_task
+status_functor = actor_has_fetch_item
+condlist_0 = {!task_giver_alive(simulation_task_9107)} fail
+
+fetch_func = %=setup_fetch_task(simulation_task_9107_fetch:food_x:1:5)%
+on_complete = %=fetch_reward_and_remove(simulation_task_9107_fetch:0.9) =reward_stash(false) =complete_task_inc_goodwill(10:isg) =inc_task_stage(simulation_task_9107) =pstor_reset(simulation_task_9107_fetch) =drx_sl_unregister_task_giver(simulation_task_9107) =drx_sl_reset_stored_task(simulation_task_9107)%
+on_fail = %=fail_task_dec_goodwill(25:isg) =pstor_reset(simulation_task_9107_fetch) =drx_sl_unregister_task_giver(simulation_task_9107) =drx_sl_reset_stored_task(simulation_task_9107)%
+
+
+;------------------------------------------------
+;-- Fetch Utils
+;------------------------------------------------
+
+; ISG dynamic clone of simulation_task_117; same original repeat_timeout / handlers, Warfare-only.
+[simulation_task_9108]
+
+icon = ui_inGame2_Pripasi
+storyline = false
+prior = 35
+sim_communities = isg
+precondition = {+story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+repeat_timeout = 32400
+;precondition = true
+
+title = unisg_hq_dynamic_9108_name
+title_functor = general_fetch_task
+descr = unisg_hq_dynamic_9108_text
+descr_functor = general_fetch_task
+job_descr = unisg_hq_dynamic_9108_about
+fetch_descr = unisg_hq_dynamic_9108_fetch_about
+task_complete_descr = unisg_hq_dynamic_9108_fetch_finish
+
+stage_complete = 1
+target_functor = general_fetch_task
+status_functor = actor_has_fetch_item
+condlist_0 = {!task_giver_alive(simulation_task_9108)} fail
+
+fetch_func = %=setup_fetch_task(simulation_task_9108_fetch:junk_x:1:3)%
+on_complete = %=fetch_reward_and_remove(simulation_task_9108_fetch:0.6) =reward_stash(true) =complete_task_inc_goodwill(7:isg) =inc_task_stage(simulation_task_9108) =pstor_reset(simulation_task_9108_fetch) =drx_sl_unregister_task_giver(simulation_task_9108) =drx_sl_reset_stored_task(simulation_task_9108)%
+on_fail = %=fail_task_dec_goodwill(25:isg) =pstor_reset(simulation_task_9108_fetch) =drx_sl_unregister_task_giver(simulation_task_9108) =drx_sl_reset_stored_task(simulation_task_9108)%
+
+;------------------------------------------------
+
+[sim_default_isg_trader_task_1]
+icon = ui_inGame2_Nochnaya_ohota
+prior = 15
+storyline = false
+title = unisg_hq_trader_task_1_title
+descr = unisg_hq_trader_task_1_descr
+job_descr = unisg_hq_trader_task_1_job
+task_complete_descr = unisg_hq_trader_task_1_finish
+repeat_timeout = 86400
+stage_complete = 1
+descr_functor = general_warfare_task
+status_functor = assault_task_status_functor
+target_functor = assault_task_target_functor
+status_functor_params = monster, monster_predatory_day, monster_predatory_night, monster_vegetarian, monster_zombied_day, monster_zombied_night, monster_special
+on_job_descr = %=setup_assault_task(sim_default_isg_trader_task_1)%
+precondition = {+story_mode_disabled =is_warfare =is_actor_from_faction(isg) =validate_assault_task(sim_default_isg_trader_task_1:1:1:nil:false:true:nil)} true, false
+on_complete = %=inc_task_stage(sim_default_isg_trader_task_1) =reward_random_money(2500:5000) =reward_stash(true) =complete_task_inc_goodwill(35:isg)%
+condlist_0 = {!task_giver_alive(sim_default_isg_trader_task_1)} fail
+
+
+; 2. Штурм вражеского лагеря
+
+[sim_default_isg_trader_task_2]
+icon = ui_inGame2_Odin_vistrel
+prior = 15
+storyline = false
+title = unisg_hq_trader_task_2_title
+descr = unisg_hq_trader_task_2_descr
+job_descr = unisg_hq_trader_task_2_job
+task_complete_descr = unisg_hq_trader_task_2_finish
+repeat_timeout = 86400
+stage_complete = 1
+descr_functor = general_warfare_task
+status_functor = assault_task_status_functor
+target_functor = assault_task_target_functor
+status_functor_params = stalker,bandit,dolg,army
+on_job_descr = %=setup_assault_task(sim_default_isg_trader_task_2)%
+precondition = {+story_mode_disabled =is_warfare =is_actor_from_faction(isg) =validate_assault_task(sim_default_isg_trader_task_2:2:1:nil:false:true:nil)} true, false
+on_complete = %=inc_task_stage(sim_default_isg_trader_task_2) =reward_random_money(5500:8500) =reward_stash(true) =complete_task_inc_goodwill(50:isg)%
+condlist_0 = {!task_giver_alive(sim_default_isg_trader_task_2)} fail
+
+
+; 3. Контракт на ликвидацию
+
+[sim_default_isg_trader_task_3]
+icon = ui_inGame2_Odin_vistrel
+prior = 15
+storyline = false
+title = unisg_hq_trader_task_3_title
+descr = unisg_hq_trader_task_3_descr
+job_descr = unisg_hq_trader_task_3_job
+task_complete_descr = unisg_hq_trader_task_3_finish
+repeat_timeout = 86400
+stage_complete = 1
+descr_functor = general_warfare_task
+status_functor = bounty_task
+target_functor = general_bounty_task
+precondition = {+story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+on_job_descr = %=setup_bounty_task(sim_default_isg_trader_task_3:false:false:stalker:bandit:dolg:army)%
+on_complete = %=inc_task_stage(sim_default_isg_trader_task_3) =reward_random_money(5000:8000) =reward_stash(true) =complete_task_inc_goodwill(45:isg)%
+condlist_0 = {!task_giver_alive(sim_default_isg_trader_task_3)} fail
+
+
+; 4. Артефакт для исследований: %s
+
+[sim_default_isg_trader_task_4]
+icon = ui_inGame2_Kontrakt_s_uchenimi
+prior = 25
+storyline = false
+title = unisg_hq_trader_task_4_title
+descr = unisg_hq_trader_task_4_descr
+job_descr = unisg_hq_trader_task_4_job
+task_complete_descr = unisg_hq_trader_task_4_finish
+repeat_timeout = 86400
+stage_complete = 1
+title_functor = general_fetch_task
+descr_functor = general_warfare_fetch_task
+fetch_descr = unisg_hq_trader_task_4_job
+fetch_func = %=setup_fetch_task(sim_default_isg_trader_task_4_fetch:artefacts:1:1)%
+status_functor = actor_has_fetch_item
+target_functor = general_fetch_task
+precondition = {+story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+on_complete = %=fetch_reward_and_remove(sim_default_isg_trader_task_4_fetch:1.1) =inc_task_stage(sim_default_isg_trader_task_4) =reward_random_money(3500:6000) =complete_task_inc_goodwill(30:isg) =pstor_reset(sim_default_isg_trader_task_4_fetch)%
+condlist_0 = {!task_giver_alive(sim_default_isg_trader_task_4)} fail
+
+
+; 5. Редкие образцы: %s
+
+[sim_default_isg_trader_task_5]
+icon = ui_inGame2_Nochnaya_ohota
+prior = 25
+storyline = false
+title = unisg_hq_trader_task_5_title
+descr = unisg_hq_trader_task_5_descr
+job_descr = unisg_hq_trader_task_5_job
+task_complete_descr = unisg_hq_trader_task_5_finish
+repeat_timeout = 86400
+stage_complete = 1
+title_functor = general_fetch_task
+descr_functor = general_warfare_fetch_task
+fetch_descr = unisg_hq_trader_task_5_job
+fetch_func = %=setup_fetch_task(sim_default_isg_trader_task_5_fetch:mutant_parts_rare:1:2)%
+status_functor = actor_has_fetch_item
+target_functor = general_fetch_task
+precondition = {+story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+on_complete = %=fetch_reward_and_remove(sim_default_isg_trader_task_5_fetch:1.35) =inc_task_stage(sim_default_isg_trader_task_5) =reward_random_money(1500:3300) =complete_task_inc_goodwill(30:isg) =pstor_reset(sim_default_isg_trader_task_5_fetch)%
+condlist_0 = {!task_giver_alive(sim_default_isg_trader_task_5)} fail
+
+
+; 6. Биоматериалы: %s
+
+[sim_default_isg_trader_task_6]
+icon = ui_inGame2_Nochnaya_ohota
+prior = 25
+storyline = false
+title = unisg_hq_trader_task_6_title
+descr = unisg_hq_trader_task_6_descr
+job_descr = unisg_hq_trader_task_6_job
+task_complete_descr = unisg_hq_trader_task_6_finish
+repeat_timeout = 86400
+stage_complete = 1
+title_functor = general_fetch_task
+descr_functor = general_warfare_fetch_task
+fetch_descr = unisg_hq_trader_task_6_job
+fetch_func = %=setup_fetch_task(sim_default_isg_trader_task_6_fetch:mutant_parts:6:10)%
+status_functor = actor_has_fetch_item
+target_functor = general_fetch_task
+precondition = {+story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+on_complete = %=fetch_reward_and_remove(sim_default_isg_trader_task_6_fetch:1.1) =inc_task_stage(sim_default_isg_trader_task_6) =reward_random_money(1200:2800) =complete_task_inc_goodwill(30:isg) =pstor_reset(sim_default_isg_trader_task_6_fetch)%
+condlist_0 = {!task_giver_alive(sim_default_isg_trader_task_6)} fail
+
+[sim_default_isg_trader_task_7]
+icon = ui_inGame2_Nochnaya_ohota
+prior = 25
+storyline = false
+title = unisg_hq_trader_task_7_title
+descr = unisg_hq_trader_task_7_descr
+job_descr = unisg_hq_trader_task_7_job
+task_complete_descr = unisg_hq_trader_task_7_finish
+repeat_timeout = 86400
+stage_complete = 1
+title_functor = general_fetch_task
+descr_functor = general_warfare_fetch_task
+fetch_descr = unisg_hq_trader_task_7_job
+fetch_func = %=setup_fetch_task(sim_default_isg_trader_task_7_fetch:medical_x:2:5)%
+status_functor = actor_has_fetch_item
+target_functor = general_fetch_task
+precondition = {+story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+on_complete = %=fetch_reward_and_remove(sim_default_isg_trader_task_7_fetch:1.05) =inc_task_stage(sim_default_isg_trader_task_7) =reward_random_money(1500:3300) =complete_task_inc_goodwill(30:isg) =pstor_reset(sim_default_isg_trader_task_7_fetch)%
+condlist_0 = {!task_giver_alive(sim_default_isg_trader_task_7)} fail
+
+
+; 6. Биоматериалы: %s
+
+[sim_default_isg_medic_task_1]
+; One-time prerequisite: stock unlock uses the native GAMMA drugkit_task_done() check.
+icon = ui_inGame2_D_Sisshik
+prior = 50
+repeat_timeout = 43200
+storyline = false
+precondition = {-sim_default_isg_medic_drugkit_done +story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+
+title = unisg_hq_medic_task_1_name
+title_functor = general_fetch_task
+descr = unisg_hq_medic_task_1_text
+descr_functor = general_fetch_task
+job_descr = unisg_hq_medic_task_1_about
+fetch_descr = unisg_hq_medic_task_1_fetch_about
+task_complete_descr = unisg_hq_medic_task_1_fetch_finish
+
+stage_complete = 1
+status_functor = actor_has_fetch_item
+target_functor = general_fetch_task
+fetch_func = %=setup_generic_fetch_task(sim_default_isg_medic_task_1_fetch:1:itm_drugkit)%
+on_complete = %=reward_stash(true) +sim_default_isg_medic_drugkit_done =fetch_reward_and_remove(sim_default_isg_medic_task_1_fetch:1.5) =complete_task_inc_goodwill(50:isg) =inc_task_stage(sim_default_isg_medic_task_1) =pstor_reset(sim_default_isg_medic_task_1_fetch) =drx_sl_unregister_task_giver(sim_default_isg_medic_task_1) =drx_sl_reset_stored_task(sim_default_isg_medic_task_1)%
+on_fail = %=pstor_reset(sim_default_isg_medic_task_1_fetch) =drx_sl_unregister_task_giver(sim_default_isg_medic_task_1) =drx_sl_reset_stored_task(sim_default_isg_medic_task_1)%
+condlist_0 = {!task_giver_alive(sim_default_isg_medic_task_1)} fail
+
+[sim_default_isg_medic_task_2]
+; Repeatable medicines supply quest, available only after handing in the drug-making kit.
+icon = ui_inGame2_Nochnaya_ohota
+prior = 25
+storyline = false
+title = unisg_hq_medic_task_2_title
+descr = unisg_hq_medic_task_2_descr
+job_descr = unisg_hq_medic_task_2_job
+task_complete_descr = unisg_hq_medic_task_2_finish
+repeat_timeout = 32400
+stage_complete = 1
+title_functor = general_fetch_task
+descr_functor = general_warfare_fetch_task
+fetch_descr = unisg_hq_medic_task_2_job
+fetch_func = %=setup_fetch_task(sim_default_isg_medic_task_2_fetch:medical_x:2:5)%
+status_functor = actor_has_fetch_item
+target_functor = general_fetch_task
+precondition = {+sim_default_isg_medic_drugkit_done +story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+on_complete = %=fetch_reward_and_remove(sim_default_isg_medic_task_2_fetch:1.05) =inc_task_stage(sim_default_isg_medic_task_2) =reward_random_money(1500:3300) =complete_task_inc_goodwill(30:isg) =pstor_reset(sim_default_isg_medic_task_2_fetch)%
+condlist_0 = {!task_giver_alive(sim_default_isg_medic_task_2)} fail
+
+
+; Infirmary medic chain ends. Barman job follows.
+
+[sim_default_isg_barman_task_1]
+icon = ui_inGame2_Nochnaya_ohota
+prior = 25
+storyline = false
+title = unisg_hq_barman_task_1_title
+descr = unisg_hq_barman_task_1_descr
+job_descr = unisg_hq_barman_task_1_job
+task_complete_descr = unisg_hq_barman_task_1_finish
+repeat_timeout = 32400
+stage_complete = 1
+title_functor = general_fetch_task
+descr_functor = general_warfare_fetch_task
+fetch_descr = unisg_hq_barman_task_1_job
+fetch_func = %=setup_fetch_task(sim_default_isg_barman_task_1_fetch:food_x:1:5)%
+status_functor = actor_has_fetch_item
+target_functor = general_fetch_task
+precondition = {+story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+on_complete = %=fetch_reward_and_remove(sim_default_isg_barman_task_1_fetch:1.1) =inc_task_stage(sim_default_isg_barman_task_1) =reward_random_money(1200:2800) =complete_task_inc_goodwill(30:isg) =pstor_reset(sim_default_isg_barman_task_1_fetch)%
+condlist_0 = {!task_giver_alive(sim_default_isg_barman_task_1)} fail
+
+;--------------------------------------------------
+; UNISG HQ v1.0.2 - native stash/document retrieval tasks.
+; Uses GAMMA tasks_stash.script, no new handlers or shared overrides.
+; Native global started flags ensure only one task per stash item type is active.
+
+; Trader: "Lost Knowledge" / classified research documents from a stash.
+[sim_default_isg_trader_task_8]
+icon = ui_inGame2_Poslednie_razrabotki
+storyline = false
+prior = 45
+repeat_timeout = 43200
+precondition = {-drx_sl_quest_item_task_1_started +story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+
+title = unisg_hq_trader_task_8_title
+descr = unisg_hq_trader_task_8_descr
+job_descr = unisg_hq_trader_task_8_job
+task_complete_descr = unisg_hq_trader_task_8_finish
+
+stage_complete = 1
+target_functor = drx_sl_quest_item_task_target
+status_functor = drx_sl_quest_item_task_status
+condlist_0 = {!task_giver_alive(sim_default_isg_trader_task_8)} fail
+on_job_descr = %=drx_sl_create_quest_stash(sim_default_isg_trader_task_8:1)%
+on_complete = %=reward_random_money_by_dist(sim_default_isg_trader_task_8:4500:6000:0.4) =complete_task_inc_goodwill(50:isg) =remove_item(drx_sl_quest_item_1) =inc_task_stage(sim_default_isg_trader_task_8) -drx_sl_quest_item_task_1_started =drx_sl_unregister_task_giver(sim_default_isg_trader_task_8) =drx_sl_reset_stored_task(sim_default_isg_trader_task_8)%
+on_fail = %=fail_task_dec_goodwill(25:isg) -drx_sl_quest_item_task_1_started =drx_sl_unregister_task_giver(sim_default_isg_trader_task_8) =drx_sl_reset_stored_task(sim_default_isg_trader_task_8)%
+
+; Barman: retrieve an intelligence PDA from a remote stash.
+[sim_default_isg_barman_task_2]
+icon = ui_inGame2_PD_Torgovets_informatsiey
+storyline = false
+prior = 45
+repeat_timeout = 43200
+precondition = {-drx_sl_quest_item_task_3_started +story_mode_disabled =is_warfare =is_actor_from_faction(isg)} true, false
+
+title = unisg_hq_barman_task_2_title
+descr = unisg_hq_barman_task_2_descr
+job_descr = unisg_hq_barman_task_2_job
+task_complete_descr = unisg_hq_barman_task_2_finish
+
+stage_complete = 1
+target_functor = drx_sl_quest_item_task_target
+status_functor = drx_sl_quest_item_task_status
+condlist_0 = {!task_giver_alive(sim_default_isg_barman_task_2)} fail
+on_job_descr = %=drx_sl_create_quest_stash(sim_default_isg_barman_task_2:3)%
+on_complete = %=reward_random_money_by_dist(sim_default_isg_barman_task_2:3500:5000:0.4) =complete_task_inc_goodwill(50:isg) =remove_item(drx_sl_quest_item_3) =inc_task_stage(sim_default_isg_barman_task_2) -drx_sl_quest_item_task_3_started =drx_sl_unregister_task_giver(sim_default_isg_barman_task_2) =drx_sl_reset_stored_task(sim_default_isg_barman_task_2)%
+on_fail = %=fail_task_dec_goodwill(25:isg) -drx_sl_quest_item_task_3_started =drx_sl_unregister_task_giver(sim_default_isg_barman_task_2) =drx_sl_reset_stored_task(sim_default_isg_barman_task_2)%

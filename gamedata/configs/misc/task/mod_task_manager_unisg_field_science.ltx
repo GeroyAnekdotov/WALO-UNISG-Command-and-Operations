@@ -1,0 +1,44 @@
+; UNISG Field Science v0.9.12 stable (native scan, corpse research, PDA guard)
+; Integrated HQ distribution v1.0.3; GAMMA + WALO 1.6.11 baseline.
+; No modifications to original tm_warfare.ltx or tm_yantar.ltx.
+
+; Escort a researcher to an anomaly on the giver's own level and hold position for measurements.
+[sim_default_isg_trader_task_9]
+icon = ui_inGame2_PD_Opitniy_stalker
+prior = 2
+storyline = false
+repeat_timeout = 86400
+stage_complete = 1
+precondition = {-unisg_field_science_busy +story_mode_disabled =is_warfare =is_actor_from_faction(isg) =unisg_field_measure_available !squad_exist(unisg_hq_field_measure_squad) !squad_exist(unisg_hq_field_research_squad) !squad_exist(ecolog_companion_task_1) !squad_exist(ecolog_companion_task_2)} true, false
+title = unisg_field_measure_title
+descr = unisg_field_measure_descr
+job_descr = unisg_field_measure_about
+task_complete_descr = unisg_field_measure_finish
+on_init = %=unisg_field_start_measure%
+status_functor = unisg_field_measure_status
+target_functor = unisg_field_measure_target
+on_complete = %=reward_random_money(4500:6500) =unisg_field_reward_local_artifact =complete_task_inc_goodwill(50:isg) =unisg_field_finish_measure%
+on_fail = %=unisg_field_abort_measure =fail_task_dec_goodwill(25:isg)%
+on_cancel = %=unisg_field_abort_measure%
+condlist_0 = {!squad_exist(unisg_hq_field_measure_squad)} fail
+
+; Escort one ISG researcher, kill mutants, wait for the researcher to inspect 5 corpses.
+; Requires medicine-production kit task, like a real operational infirmary.
+[sim_default_isg_medic_task_3]
+icon = ui_inGame2_Ohota_na_Himeru
+prior = 2
+storyline = false
+repeat_timeout = 86400
+stage_complete = 1
+precondition = {-unisg_field_science_busy +sim_default_isg_medic_drugkit_done +story_mode_disabled =is_warfare =is_actor_from_faction(isg) =unisg_field_research_available !squad_exist(unisg_hq_field_measure_squad) !squad_exist(unisg_hq_field_research_squad)} true, false
+title = unisg_field_research_title
+descr = unisg_field_research_descr
+job_descr = unisg_field_research_about
+task_complete_descr = unisg_field_research_finish
+on_init = %=unisg_field_start_research%
+status_functor = unisg_field_research_status
+target_functor = unisg_field_research_target
+on_complete = %=reward_random_money(6000:8000) =reward_stash(true) =complete_task_inc_goodwill(50:isg) =unisg_field_finish_research%
+on_fail = %=unisg_field_abort_research =fail_task_dec_goodwill(25:isg)%
+on_cancel = %=unisg_field_abort_research%
+condlist_0 = {!squad_exist(unisg_hq_field_research_squad)} fail
