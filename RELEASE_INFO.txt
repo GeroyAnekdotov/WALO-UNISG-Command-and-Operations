@@ -1,6 +1,6 @@
 WALO: UNISG Command & Operations | v1.0.3
 ================================================
-Branding-only final package of HQ v1.0.2 + Field Science v0.9.12.
+Original v1.0.3 provenance: branding-only package of HQ v1.0.2 + Field Science v0.9.12.
 Compared with WALO UNISG HQ + Field Science v1.0.3, no gamedata content changed.
 Internal script names, task IDs, squad IDs, save keys and patch names are preserved.
 
@@ -13,3 +13,9 @@ This does not establish exhaustive regression coverage or compatibility with all
 
 This is an unofficial WALO add-on. Merge supplied patches into current WALO/GAMMA
 source files before using a different version of those upstream mods.
+
+GitHub package preparation retains all 37 gamedata files from the tested v1.0.3
+payload; documentation and packaging are updated, with no gameplay version bump.
+MO2 asset: WALO_UNISG_Command_and_Operations_1.0.3_FULL_MO2.zip
+See CHANGELOG.md, RELEASE_NOTES.md and THIRD_PARTY_NOTICES.md for preparation,
+known compatibility limits, attribution and unresolved redistribution terms.

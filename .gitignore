@@ -1,1 +1,22 @@
 /_reference/
+/dist/
+/_shared_reference/
+/.venv/
+__pycache__/
+*.py[cod]
+
+# Local MO2 metadata, saves, logs, crash evidence and historical packages
+meta.ini
+*.scop
+*.scoc
+*.sav
+*.[lL][oO][gG]
+*.[lL][oO][gG].*
+*.[dD][mM][pP]
+*.[mM][dD][mM][pP]
+*.[hH][dD][mM][pP]
+*.[eE][tT][lL]
+*.[wW][eE][rR]
+*.zip
+*.7z
+*.rar

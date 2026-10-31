@@ -1,2 +1,10 @@
 # Auto detect text files and perform LF normalization
-* text=auto
+* text=auto eol=lf
+
+# Reproduce the tested payload's existing line endings without changing encodings.
+/gamedata/** text eol=lf
+/gamedata/configs/mod_system_unisg_field_science_squads.ltx text eol=crlf
+/gamedata/scripts/ui_mm_faction_select.script text eol=crlf
+/gamedata/configs/gameplay/profiles/character_desc_isg_2.xml text eol=crlf
+/gamedata/configs/misc/task/mod_task_manager_unisg_hq_faction_parity.ltx text eol=crlf
+/gamedata/configs/text/*/mod_unisg_hq_faction_parity.xml text eol=crlf
